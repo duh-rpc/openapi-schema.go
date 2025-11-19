@@ -24,7 +24,16 @@ type ConvertResult struct {
 	TypeMap  map[string]*TypeInfo
 }
 
-// StructResult contains Go struct output and type metadata
+// StructResult contains the output from converting OpenAPI to Go structs only.
+//
+// This is the result type for ConvertToStruct(), which generates Go structs for
+// all schemas without producing Protocol Buffer definitions.
+//
+// Field behavior:
+//   - Golang contains Go source code with all schema types as structs
+//   - TypeMap provides metadata about each type (all marked as TypeLocationGolang)
+//   - Union types include custom MarshalJSON/UnmarshalJSON methods
+//   - Regular types are simple structs with JSON tags
 type StructResult struct {
 	Golang  []byte
 	TypeMap map[string]*TypeInfo
