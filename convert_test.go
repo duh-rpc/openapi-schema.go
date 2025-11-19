@@ -1557,3 +1557,644 @@ components:
 	assert.Equal(t, conv.TypeLocationGolang, productInfo.Location)
 	assert.Empty(t, productInfo.Reason)
 }
+
+func TestConvertToStructUnionMarshaling(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Shape:
+      oneOf:
+        - $ref: '#/components/schemas/Circle'
+        - $ref: '#/components/schemas/Square'
+      discriminator:
+        propertyName: shapeType
+        mapping:
+          circle: '#/components/schemas/Circle'
+          square: '#/components/schemas/Square'
+    Circle:
+      type: object
+      properties:
+        shapeType:
+          type: string
+        radius:
+          type: number
+    Square:
+      type: object
+      properties:
+        shapeType:
+          type: string
+        side:
+          type: number
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/shapes",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+
+	goCode := string(result.Golang)
+
+	assert.Contains(t, goCode, "func (u *Shape) MarshalJSON() ([]byte, error)")
+	assert.Contains(t, goCode, "func (u *Shape) UnmarshalJSON(data []byte) error")
+
+	assert.Contains(t, goCode, "case \"circle\":")
+	assert.Contains(t, goCode, "case \"square\":")
+
+	assert.Contains(t, goCode, "u.Circle = &Circle{}")
+	assert.Contains(t, goCode, "u.Square = &Square{}")
+}
+
+func TestConvertToStructMultipleUnions(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: petType
+    Vehicle:
+      oneOf:
+        - $ref: '#/components/schemas/Car'
+        - $ref: '#/components/schemas/Bike'
+      discriminator:
+        propertyName: vehicleType
+    Dog:
+      type: object
+      properties:
+        petType:
+          type: string
+        bark:
+          type: string
+    Cat:
+      type: object
+      properties:
+        petType:
+          type: string
+        meow:
+          type: string
+    Car:
+      type: object
+      properties:
+        vehicleType:
+          type: string
+        doors:
+          type: integer
+    Bike:
+      type: object
+      properties:
+        vehicleType:
+          type: string
+        gears:
+          type: integer
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/models",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+
+	goCode := string(result.Golang)
+
+	assert.Contains(t, goCode, "type Pet struct")
+	assert.Contains(t, goCode, "type Vehicle struct")
+	assert.Contains(t, goCode, "type Dog struct")
+	assert.Contains(t, goCode, "type Cat struct")
+	assert.Contains(t, goCode, "type Car struct")
+	assert.Contains(t, goCode, "type Bike struct")
+
+	assert.Contains(t, goCode, "func (u *Pet) MarshalJSON()")
+	assert.Contains(t, goCode, "func (u *Pet) UnmarshalJSON(")
+	assert.Contains(t, goCode, "func (u *Vehicle) MarshalJSON()")
+	assert.Contains(t, goCode, "func (u *Vehicle) UnmarshalJSON(")
+
+	require.Len(t, result.TypeMap, 6)
+
+	petInfo := result.TypeMap["Pet"]
+	require.NotNil(t, petInfo)
+	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, "contains oneOf", petInfo.Reason)
+
+	vehicleInfo := result.TypeMap["Vehicle"]
+	require.NotNil(t, vehicleInfo)
+	assert.Equal(t, conv.TypeLocationGolang, vehicleInfo.Location)
+	assert.Equal(t, "contains oneOf", vehicleInfo.Reason)
+}
+
+func TestConvertToStructMixedTypes(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: type
+    Dog:
+      type: object
+      properties:
+        type:
+          type: string
+        breed:
+          type: string
+    Cat:
+      type: object
+      properties:
+        type:
+          type: string
+        color:
+          type: string
+    Product:
+      type: object
+      properties:
+        sku:
+          type: string
+        price:
+          type: number
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/mixed",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+
+	goCode := string(result.Golang)
+
+	assert.Contains(t, goCode, "type User struct")
+	assert.Contains(t, goCode, "type Pet struct")
+	assert.Contains(t, goCode, "type Dog struct")
+	assert.Contains(t, goCode, "type Cat struct")
+	assert.Contains(t, goCode, "type Product struct")
+
+	assert.Contains(t, goCode, "func (u *Pet) MarshalJSON()")
+	assert.Contains(t, goCode, "func (u *Pet) UnmarshalJSON(")
+
+	require.Len(t, result.TypeMap, 5)
+
+	userInfo := result.TypeMap["User"]
+	require.NotNil(t, userInfo)
+	assert.Equal(t, conv.TypeLocationGolang, userInfo.Location)
+	assert.Empty(t, userInfo.Reason)
+
+	productInfo := result.TypeMap["Product"]
+	require.NotNil(t, productInfo)
+	assert.Equal(t, conv.TypeLocationGolang, productInfo.Location)
+	assert.Empty(t, productInfo.Reason)
+
+	petInfo := result.TypeMap["Pet"]
+	require.NotNil(t, petInfo)
+	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, "contains oneOf", petInfo.Reason)
+}
+
+func TestConvertToStructReferencingTypes(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Owner:
+      type: object
+      properties:
+        name:
+          type: string
+        pet:
+          $ref: '#/components/schemas/Pet'
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: type
+    Dog:
+      type: object
+      properties:
+        type:
+          type: string
+        breed:
+          type: string
+    Cat:
+      type: object
+      properties:
+        type:
+          type: string
+        color:
+          type: string
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/refs",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+
+	goCode := string(result.Golang)
+
+	assert.Contains(t, goCode, "type Owner struct")
+	assert.Contains(t, goCode, "type Pet struct")
+	assert.Contains(t, goCode, "type Dog struct")
+	assert.Contains(t, goCode, "type Cat struct")
+
+	require.Len(t, result.TypeMap, 4)
+
+	ownerInfo := result.TypeMap["Owner"]
+	require.NotNil(t, ownerInfo)
+	assert.Equal(t, conv.TypeLocationGolang, ownerInfo.Location)
+
+	petInfo := result.TypeMap["Pet"]
+	require.NotNil(t, petInfo)
+	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, "contains oneOf", petInfo.Reason)
+}
+
+func TestConvertToStructCodeCompiles(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: type
+    Dog:
+      type: object
+      properties:
+        type:
+          type: string
+        breed:
+          type: string
+    Cat:
+      type: object
+      properties:
+        type:
+          type: string
+        color:
+          type: string
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/models",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+
+	tmpDir := t.TempDir()
+
+	goFile := filepath.Join(tmpDir, "models.go")
+	err = os.WriteFile(goFile, result.Golang, 0644)
+	require.NoError(t, err)
+
+	modContent := `module test
+go 1.21
+`
+	modFile := filepath.Join(tmpDir, "go.mod")
+	err = os.WriteFile(modFile, []byte(modContent), 0644)
+	require.NoError(t, err)
+
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "compilation failed:\n%s\nGenerated code:\n%s",
+		string(output), string(result.Golang))
+}
+
+func TestConvertToStructJSONRoundTrip(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: petType
+    Dog:
+      type: object
+      properties:
+        petType:
+          type: string
+        breed:
+          type: string
+    Cat:
+      type: object
+      properties:
+        petType:
+          type: string
+        color:
+          type: string
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "test/models",
+	})
+	require.NoError(t, err)
+
+	tmpDir := t.TempDir()
+
+	modelsDir := filepath.Join(tmpDir, "models")
+	err = os.MkdirAll(modelsDir, 0755)
+	require.NoError(t, err)
+
+	goFile := filepath.Join(modelsDir, "models.go")
+	err = os.WriteFile(goFile, result.Golang, 0644)
+	require.NoError(t, err)
+
+	testProg := `package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"test/models"
+)
+
+func main() {
+	userJSON := []byte(` + "`" + `{"id":"123","name":"Alice"}` + "`" + `)
+	var user models.User
+	if err := json.Unmarshal(userJSON, &user); err != nil {
+		fmt.Fprintf(os.Stderr, "user unmarshal error: %v\n", err)
+		os.Exit(1)
+	}
+	if user.Id != "123" || user.Name != "Alice" {
+		fmt.Fprintf(os.Stderr, "user values incorrect\n")
+		os.Exit(1)
+	}
+
+	marshaled, err := json.Marshal(&user)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "user marshal error: %v\n", err)
+		os.Exit(1)
+	}
+	if len(marshaled) == 0 {
+		fmt.Fprintf(os.Stderr, "marshaled user is empty\n")
+		os.Exit(1)
+	}
+
+	dogJSON := []byte(` + "`" + `{"petType":"dog","breed":"labrador"}` + "`" + `)
+	var pet models.Pet
+	if err := json.Unmarshal(dogJSON, &pet); err != nil {
+		fmt.Fprintf(os.Stderr, "pet unmarshal error: %v\n", err)
+		os.Exit(1)
+	}
+	if pet.Dog == nil {
+		fmt.Fprintf(os.Stderr, "expected Dog to be set\n")
+		os.Exit(1)
+	}
+	if pet.Dog.Breed != "labrador" {
+		fmt.Fprintf(os.Stderr, "expected breed=labrador, got %s\n", pet.Dog.Breed)
+		os.Exit(1)
+	}
+
+	petMarshaled, err := json.Marshal(&pet)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pet marshal error: %v\n", err)
+		os.Exit(1)
+	}
+
+	var original, remarshaled map[string]interface{}
+	json.Unmarshal(dogJSON, &original)
+	json.Unmarshal(petMarshaled, &remarshaled)
+
+	if original["petType"] != remarshaled["petType"] {
+		fmt.Fprintf(os.Stderr, "petType mismatch\n")
+		os.Exit(1)
+	}
+	if original["breed"] != remarshaled["breed"] {
+		fmt.Fprintf(os.Stderr, "breed mismatch\n")
+		os.Exit(1)
+	}
+
+	fmt.Println("OK")
+}
+`
+
+	testFile := filepath.Join(tmpDir, "main.go")
+	err = os.WriteFile(testFile, []byte(testProg), 0644)
+	require.NoError(t, err)
+
+	modFile := filepath.Join(tmpDir, "go.mod")
+	err = os.WriteFile(modFile, []byte("module test\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	cmd := exec.Command("go", "run", ".")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "test program failed:\n%s", string(output))
+	assert.Contains(t, string(output), "OK")
+}
+
+func TestConvertToStructEmptySchemas(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas: {}
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/empty",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.TypeMap)
+	assert.Empty(t, result.TypeMap)
+
+	goCode := string(result.Golang)
+	assert.Contains(t, goCode, "package empty")
+}
+
+func TestConvertToStructTypeMapCompleteness(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+    Product:
+      type: object
+      properties:
+        sku:
+          type: string
+    Order:
+      type: object
+      properties:
+        orderId:
+          type: string
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: type
+    Dog:
+      type: object
+      properties:
+        type:
+          type: string
+    Cat:
+      type: object
+      properties:
+        type:
+          type: string
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/complete",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.TypeMap)
+
+	require.Len(t, result.TypeMap, 6)
+
+	expectedTypes := []string{"User", "Product", "Order", "Pet", "Dog", "Cat"}
+	for _, typeName := range expectedTypes {
+		info := result.TypeMap[typeName]
+		require.NotNil(t, info, "TypeMap missing entry for %s", typeName)
+		assert.Equal(t, conv.TypeLocationGolang, info.Location)
+	}
+
+	assert.Empty(t, result.TypeMap["User"].Reason)
+	assert.Empty(t, result.TypeMap["Product"].Reason)
+	assert.Empty(t, result.TypeMap["Order"].Reason)
+	assert.Equal(t, "contains oneOf", result.TypeMap["Pet"].Reason)
+	assert.Equal(t, "variant of union type Pet", result.TypeMap["Dog"].Reason)
+	assert.Equal(t, "variant of union type Pet", result.TypeMap["Cat"].Reason)
+}
+
+func TestConvertToStructUnionOnlySchemas(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: type
+    Dog:
+      type: object
+      properties:
+        type:
+          type: string
+        breed:
+          type: string
+    Cat:
+      type: object
+      properties:
+        type:
+          type: string
+        color:
+          type: string
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/unions",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+
+	goCode := string(result.Golang)
+
+	assert.Contains(t, goCode, "package unions")
+	assert.Contains(t, goCode, "type Pet struct")
+	assert.Contains(t, goCode, "type Dog struct")
+	assert.Contains(t, goCode, "type Cat struct")
+
+	assert.Contains(t, goCode, "func (u *Pet) MarshalJSON()")
+	assert.Contains(t, goCode, "func (u *Pet) UnmarshalJSON(")
+
+	require.Len(t, result.TypeMap, 3)
+
+	petInfo := result.TypeMap["Pet"]
+	require.NotNil(t, petInfo)
+	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, "contains oneOf", petInfo.Reason)
+
+	dogInfo := result.TypeMap["Dog"]
+	require.NotNil(t, dogInfo)
+	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, "variant of union type Pet", dogInfo.Reason)
+
+	catInfo := result.TypeMap["Cat"]
+	require.NotNil(t, catInfo)
+	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
+}
