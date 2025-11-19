@@ -1390,3 +1390,170 @@ components:
 	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
 	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
 }
+
+func TestConvertToStructBasics(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		given   []byte
+		opts    conv.ConvertOptions
+		wantErr string
+	}{
+		{
+			name:    "empty openapi bytes",
+			given:   []byte{},
+			opts:    conv.ConvertOptions{GoPackagePath: "github.com/example/models"},
+			wantErr: "openapi input cannot be empty",
+		},
+		{
+			name:    "empty GoPackagePath",
+			given:   []byte("openapi: 3.0.0"),
+			opts:    conv.ConvertOptions{},
+			wantErr: "GoPackagePath cannot be empty",
+		},
+		{
+			name:    "invalid YAML syntax",
+			given:   []byte("this is not valid: [yaml"),
+			opts:    conv.ConvertOptions{GoPackagePath: "github.com/example/models"},
+			wantErr: "failed to parse OpenAPI document",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := conv.ConvertToStruct(test.given, test.opts)
+
+			if test.wantErr != "" {
+				require.ErrorContains(t, err, test.wantErr)
+				require.Nil(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+		})
+	}
+}
+
+func TestConvertToStructSimpleSchema(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/models",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+	require.NotNil(t, result.TypeMap)
+
+	goCode := string(result.Golang)
+	assert.Contains(t, goCode, "package models")
+	assert.Contains(t, goCode, "type User struct")
+	assert.Contains(t, goCode, "Id")
+	assert.Contains(t, goCode, "Name")
+	assert.Contains(t, goCode, "Age")
+	assert.Contains(t, goCode, "json:\"id\"")
+	assert.Contains(t, goCode, "json:\"name\"")
+	assert.Contains(t, goCode, "json:\"age\"")
+
+	userInfo := result.TypeMap["User"]
+	require.NotNil(t, userInfo)
+	assert.Equal(t, conv.TypeLocationGolang, userInfo.Location)
+	assert.Empty(t, userInfo.Reason)
+}
+
+func TestConvertToStructWithUnion(t *testing.T) {
+	input := []byte(`openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: type
+        mapping:
+          dog: '#/components/schemas/Dog'
+          cat: '#/components/schemas/Cat'
+    Dog:
+      type: object
+      properties:
+        type:
+          type: string
+        breed:
+          type: string
+    Cat:
+      type: object
+      properties:
+        type:
+          type: string
+        color:
+          type: string
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+`)
+
+	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+		GoPackagePath: "github.com/example/models/v1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Golang)
+	require.NotNil(t, result.TypeMap)
+
+	goCode := string(result.Golang)
+	assert.Contains(t, goCode, "package models")
+	assert.Contains(t, goCode, "type Pet struct")
+	assert.Contains(t, goCode, "type Dog struct")
+	assert.Contains(t, goCode, "type Cat struct")
+	assert.Contains(t, goCode, "type Product struct")
+
+	assert.Contains(t, goCode, "func (u *Pet) MarshalJSON()")
+	assert.Contains(t, goCode, "func (u *Pet) UnmarshalJSON(")
+
+	require.Len(t, result.TypeMap, 4)
+
+	petInfo := result.TypeMap["Pet"]
+	require.NotNil(t, petInfo)
+	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, "contains oneOf", petInfo.Reason)
+
+	dogInfo := result.TypeMap["Dog"]
+	require.NotNil(t, dogInfo)
+	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, "variant of union type Pet", dogInfo.Reason)
+
+	catInfo := result.TypeMap["Cat"]
+	require.NotNil(t, catInfo)
+	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
+
+	productInfo := result.TypeMap["Product"]
+	require.NotNil(t, productInfo)
+	assert.Equal(t, conv.TypeLocationGolang, productInfo.Location)
+	assert.Empty(t, productInfo.Reason)
+}

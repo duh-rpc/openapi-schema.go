@@ -24,6 +24,12 @@ type ConvertResult struct {
 	TypeMap  map[string]*TypeInfo
 }
 
+// StructResult contains Go struct output and type metadata
+type StructResult struct {
+	Golang  []byte
+	TypeMap map[string]*TypeInfo
+}
+
 // TypeInfo contains metadata about where a type is generated and why
 type TypeInfo struct {
 	Location TypeLocation
@@ -149,6 +155,92 @@ func Convert(openapi []byte, opts ConvertOptions) (*ConvertResult, error) {
 	}, nil
 }
 
+// ConvertToStruct converts all OpenAPI schemas to Go structs only, without
+// generating Protocol Buffer definitions. This provides a pure Go struct
+// generation path for users who need Go types but not protobuf.
+//
+// Unlike Convert(), this function generates Go structs for ALL schemas:
+//   - Union types (oneOf with discriminator) get custom MarshalJSON/UnmarshalJSON
+//   - Regular types become simple structs with JSON tags
+//   - All types appear in TypeMap with Location=TypeLocationGolang
+//
+// Field names follow the same conversion rules as Convert():
+//   - Invalid proto characters (hyphens, dots, spaces) are replaced with underscores
+//   - JSON tags preserve original field names from OpenAPI schema
+//
+// Parameters:
+//   - openapi: OpenAPI specification bytes (YAML or JSON)
+//   - opts: Conversion options (only GoPackagePath is required, PackageName defaults to "main")
+//
+// Returns:
+//   - StructResult containing Go source code and type metadata
+//
+// Returns an error if:
+//   - openapi is empty
+//   - opts.GoPackagePath is empty
+//   - the OpenAPI document is invalid or not version 3.x
+//   - any schema contains unsupported features
+func ConvertToStruct(openapi []byte, opts ConvertOptions) (*StructResult, error) {
+	if len(openapi) == 0 {
+		return nil, fmt.Errorf("openapi input cannot be empty")
+	}
+
+	if opts.GoPackagePath == "" {
+		return nil, fmt.Errorf("GoPackagePath cannot be empty")
+	}
+
+	// Default PackageName to "main" if empty (needed by BuildMessages)
+	if opts.PackageName == "" {
+		opts.PackageName = "main"
+	}
+
+	doc, err := parser.ParseDocument(openapi)
+	if err != nil {
+		return nil, err
+	}
+
+	schemas, err := doc.Schemas()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build dependency graph for schema validation and discriminator support
+	ctx := internal.NewContext()
+	graph, err := internal.BuildMessages(schemas, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Compute transitive closure to get reasons map for TypeMap
+	_, _, reasons := graph.ComputeTransitiveClosure()
+
+	// Mark ALL schemas for Go generation (not filtered by transitive closure)
+	goTypes := make(map[string]bool)
+	for _, schema := range schemas {
+		goTypes[schema.Name] = true
+	}
+
+	// Generate Go structs for all schemas
+	goCtx := internal.NewGoContext(internal.ExtractPackageName(opts.GoPackagePath))
+	err = internal.BuildGoStructs(schemas, goTypes, graph, goCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	goBytes, err := internal.GenerateGo(goCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build TypeMap marking all schemas as Golang location
+	typeMap := buildStructTypeMap(schemas, reasons)
+
+	return &StructResult{
+		Golang:  goBytes,
+		TypeMap: typeMap,
+	}, nil
+}
+
 // buildTypeMap creates a TypeMap from dependency graph classification results
 func buildTypeMap(goTypes, protoTypes map[string]bool, reasons map[string]string) map[string]*TypeInfo {
 	typeMap := make(map[string]*TypeInfo)
@@ -166,6 +258,24 @@ func buildTypeMap(goTypes, protoTypes map[string]bool, reasons map[string]string
 		typeMap[name] = &TypeInfo{
 			Location: TypeLocationProto,
 			Reason:   "",
+		}
+	}
+
+	return typeMap
+}
+
+// buildStructTypeMap creates TypeMap marking all schemas as Golang location
+func buildStructTypeMap(schemas []*parser.SchemaEntry, reasons map[string]string) map[string]*TypeInfo {
+	typeMap := make(map[string]*TypeInfo)
+
+	for _, schema := range schemas {
+		reason := ""
+		if r, ok := reasons[schema.Name]; ok {
+			reason = r
+		}
+		typeMap[schema.Name] = &TypeInfo{
+			Location: TypeLocationGolang,
+			Reason:   reason,
 		}
 	}
 
