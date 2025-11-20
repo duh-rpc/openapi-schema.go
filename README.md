@@ -214,6 +214,108 @@ The example generator honors OpenAPI schema constraints:
 | `default` | Uses default value if specified |
 | `example` | Uses example value if specified (highest priority) |
 
+**Field Heuristics:**
+
+The example generator applies smart heuristics based on field names to produce more realistic examples:
+
+**Cursor Fields** - Fields named `cursor`, `first`, or `after` (case-insensitive) generate base64-looking strings:
+```go
+openapi := []byte(`openapi: 3.0.0
+components:
+  schemas:
+    PageInfo:
+      type: object
+      properties:
+        cursor:
+          type: string
+        hasNext:
+          type: boolean
+`)
+
+result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    IncludeAll: true,
+    Seed:       42,
+})
+// cursor: "dGhpc2lzYWN1cnNvcg" (16-32 character base64-like string)
+```
+
+**Message Fields** - Fields named `error` or `message` (case-insensitive) generate human-readable text:
+```go
+openapi := []byte(`openapi: 3.0.0
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+`)
+
+result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    IncludeAll: true,
+})
+// error: "An error occurred"
+// message: "This is a message"
+```
+
+**Non-Zero Defaults** - Integers and numbers without constraints generate random values (1-100 for integers, 1.0-100.0 for numbers) instead of zero:
+```go
+openapi := []byte(`openapi: 3.0.0
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        quantity:
+          type: integer
+        price:
+          type: number
+`)
+
+result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    IncludeAll: true,
+    Seed:       42,
+})
+// quantity: 42 (random 1-100)
+// price: 67.3 (random 1.0-100.0)
+```
+
+**Field Overrides:**
+
+Override specific field values across all schemas using `FieldOverrides`:
+
+```go
+openapi := []byte(`openapi: 3.0.0
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+`)
+
+result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    FieldOverrides: map[string]interface{}{
+        "code":    500,
+        "message": "Internal server error",
+    },
+    IncludeAll: true,
+})
+// code: 500 (overridden)
+// message: "Internal server error" (overridden)
+```
+
+**Override Priority:** `example` > `default` > `FieldOverride` > heuristics > generated value
+
+Field overrides use case-sensitive matching and apply to any field with the matching name across all schemas.
+
 **Circular Reference Handling:**
 
 Circular references are automatically detected and broken to prevent infinite recursion:

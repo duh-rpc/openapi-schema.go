@@ -289,6 +289,333 @@ components:
 
 **Priority:** `example` > `default` > generated value
 
+## Smart Field Heuristics
+
+The example generator applies intelligent heuristics based on field names to produce more realistic and context-aware examples. These heuristics recognize common field naming patterns and generate appropriate values automatically.
+
+### Cursor Fields
+
+Fields with names commonly used for pagination cursors generate base64-looking strings that resemble real cursor tokens.
+
+**Recognized field names (case-insensitive):**
+- `cursor`
+- `first`
+- `after`
+
+**Generated values:**
+- Random alphanumeric strings using base64 character set: `[a-zA-Z0-9+/]`
+- Length: randomly between 16-32 characters
+- Example: `"dGhpc2lzYWN1cnNvcg"`, `"YWJjZGVmZ2hpamts"`
+
+**OpenAPI:**
+```yaml
+components:
+  schemas:
+    PageInfo:
+      type: object
+      properties:
+        cursor:
+          type: string
+        first:
+          type: string
+        after:
+          type: string
+        hasNext:
+          type: boolean
+```
+
+**Generated Example:**
+```json
+{
+  "cursor": "dGhpc2lzYWN1cnNvcg",
+  "first": "YWJjZGVmZ2hpamts",
+  "after": "bXlwYWdlY3Vyc29y",
+  "hasNext": true
+}
+```
+
+**Notes:**
+- Case-insensitive matching: `Cursor`, `CURSOR`, and `cursor` all work
+- Applies BEFORE format checking (cursor heuristic takes precedence over format)
+- Only applies to string fields
+
+### Message Fields
+
+Fields with names commonly used for error messages and descriptions generate human-readable text.
+
+**Recognized field names (case-insensitive):**
+- `error` → `"An error occurred"`
+- `message` → `"This is a message"`
+
+**OpenAPI:**
+```yaml
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+```
+
+**Generated Example:**
+```json
+{
+  "code": 42,
+  "error": "An error occurred",
+  "message": "This is a message",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+**Notes:**
+- Case-insensitive matching: `Error`, `MESSAGE`, etc. all work
+- Provides more realistic error responses than random strings
+- Only applies to string fields
+
+### Non-Zero Defaults for Numbers
+
+Integers and numbers without min/max constraints generate random non-zero values instead of defaulting to zero. This produces more realistic examples that better represent actual data.
+
+**Default behavior:**
+- **Integers without constraints**: Random value between 1-100
+- **Numbers without constraints**: Random value between 1.0-100.0
+
+**OpenAPI:**
+```yaml
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        quantity:
+          type: integer
+        price:
+          type: number
+        rating:
+          type: number
+          minimum: 0.0
+          maximum: 5.0
+```
+
+**Generated Example:**
+```json
+{
+  "quantity": 42,
+  "price": 67.34,
+  "rating": 3.8
+}
+```
+
+**Notes:**
+- Only applies when BOTH `minimum` and `maximum` are not specified
+- If either `minimum` or `maximum` is set, normal constraint logic applies
+- Makes examples more visually distinct and realistic
+- Deterministic with fixed seed
+
+### Heuristic Priority
+
+Field heuristics apply at a specific point in the value generation priority:
+
+**Full priority order:** `example` > `default` > `FieldOverride` > **heuristics** > generated value
+
+This means:
+- Schema `example` values always take precedence
+- Schema `default` values override heuristics
+- Field overrides (see below) override heuristics
+- Heuristics only apply when no higher-priority value is available
+
+**Example:**
+```yaml
+properties:
+  message:
+    type: string
+    default: "Default message"
+```
+**Generated:** `"Default message"` (default overrides message heuristic)
+
+```yaml
+properties:
+  message:
+    type: string
+```
+**Generated:** `"This is a message"` (message heuristic applies)
+
+## Field Overrides
+
+Field overrides allow you to specify exact values for specific field names across all schemas. This is useful for generating examples with consistent error codes, status values, or other standardized fields.
+
+### Basic Usage
+
+```go
+result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    FieldOverrides: map[string]interface{}{
+        "code":    500,
+        "status":  "error",
+        "message": "Internal server error",
+    },
+    IncludeAll: true,
+})
+```
+
+### How Field Overrides Work
+
+**Scope:** Field overrides apply to any field with a matching name across ALL schemas in the document.
+
+**Matching:** Field names are matched case-sensitively to ensure exact JSON field name matches.
+
+**Type validation:** Override values must match the schema's type or an error is returned:
+- Integer fields: Accept numeric values (int or float64 without decimal)
+- Number fields: Accept numeric values
+- String fields: Accept string values
+- Boolean fields: Accept boolean values
+
+### Complete Example
+
+**OpenAPI:**
+```yaml
+openapi: 3.0.0
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        status:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationError:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        field:
+          type: string
+```
+
+**Code:**
+```go
+result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    FieldOverrides: map[string]interface{}{
+        "code":    400,
+        "message": "Validation failed",
+    },
+    IncludeAll: true,
+    Seed:       42,
+})
+```
+
+**Generated Examples:**
+```json
+// ErrorResponse
+{
+  "code": 400,
+  "status": "random-string",
+  "message": "Validation failed",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+
+// ValidationError
+{
+  "code": 400,
+  "message": "Validation failed",
+  "field": "random-string"
+}
+```
+
+Note that `code` and `message` are overridden in both schemas.
+
+### Override Priority
+
+Field overrides fit into the value generation priority as follows:
+
+**Priority:** `example` > `default` > **FieldOverride** > heuristics > generated value
+
+**Examples:**
+
+```yaml
+# Override is used (no example or default)
+properties:
+  code:
+    type: integer
+# With FieldOverrides: {"code": 400}
+# Generated: 400
+```
+
+```yaml
+# Default takes precedence over override
+properties:
+  code:
+    type: integer
+    default: 200
+# With FieldOverrides: {"code": 400}
+# Generated: 200 (default wins)
+```
+
+```yaml
+# Example takes precedence over everything
+properties:
+  code:
+    type: integer
+    example: 201
+# With FieldOverrides: {"code": 400}
+# Generated: 201 (example wins)
+```
+
+```yaml
+# Override takes precedence over heuristics
+properties:
+  message:
+    type: string
+# With FieldOverrides: {"message": "Custom error"}
+# Generated: "Custom error" (override wins over "This is a message" heuristic)
+```
+
+### Type Mismatch Errors
+
+If an override value doesn't match the schema type, an error is returned:
+
+```go
+result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    FieldOverrides: map[string]interface{}{
+        "code": "not a number",  // Type mismatch
+    },
+    IncludeAll: true,
+})
+// err: "field override for 'code' has wrong type"
+```
+
+**Type matching rules:**
+- Integer fields: Must be numeric and whole number (float64 without decimal portion)
+- Number fields: Must be numeric (int or float64)
+- String fields: Must be string
+- Boolean fields: Must be boolean
+
+### Limitations
+
+**Exact name matching only:** Overrides use exact field name matching. Wildcards, patterns, or partial matches are not supported.
+
+**Case-sensitive:** Field names must match exactly, including case: `{"Code": 400}` will NOT match a field named `"code"`.
+
+**No path-based overrides:** Cannot target specific fields in specific schemas. Override applies to ALL fields with matching name.
+
+**No nested overrides:** Cannot override nested object properties with dot notation like `"address.city"`.
+
 ## Format Support
 
 The generator recognizes common OpenAPI string formats and generates appropriate values:
