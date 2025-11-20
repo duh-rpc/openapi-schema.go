@@ -48,10 +48,11 @@ type ExampleResult struct {
 
 // ExampleOptions configures JSON example generation
 type ExampleOptions struct {
-	SchemaNames []string // Specific schemas to generate (ignored if IncludeAll is true)
-	MaxDepth    int      // Maximum nesting depth (default 5)
-	IncludeAll  bool     // If true, generate examples for all schemas (takes precedence over SchemaNames)
-	Seed        int64    // Random seed for deterministic generation (0 = use time-based seed)
+	SchemaNames    []string               // Specific schemas to generate (ignored if IncludeAll is true)
+	MaxDepth       int                    // Maximum nesting depth (default 5)
+	IncludeAll     bool                   // If true, generate examples for all schemas (takes precedence over SchemaNames)
+	Seed           int64                  // Random seed for deterministic generation (0 = use time-based seed)
+	FieldOverrides map[string]interface{} // Override values for specific field names (e.g., {"code": 400})
 }
 
 // TypeInfo contains metadata about where a type is generated and why
@@ -372,7 +373,7 @@ func ConvertToExamples(openapi []byte, opts ExampleOptions) (*ExampleResult, err
 		schemaNames = nil
 	}
 
-	examples, err := internal.GenerateExamples(schemas, schemaNames, opts.MaxDepth, opts.Seed)
+	examples, err := internal.GenerateExamples(schemas, schemaNames, opts.MaxDepth, opts.Seed, opts.FieldOverrides)
 	if err != nil {
 		return nil, err
 	}

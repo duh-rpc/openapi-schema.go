@@ -13,26 +13,28 @@ import (
 
 // ExampleContext holds state during example generation
 type ExampleContext struct {
-	schemas  map[string]*parser.SchemaEntry // All available schemas (name + proxy)
-	path     []string                       // Current path for circular detection (e.g., ["User", "Address"])
-	depth    int                            // Current nesting depth
-	maxDepth int                            // Maximum allowed depth
-	rand     *rand.Rand                     // Random number generator (seeded for determinism)
+	schemas        map[string]*parser.SchemaEntry // All available schemas (name + proxy)
+	path           []string                       // Current path for circular detection (e.g., ["User", "Address"])
+	depth          int                            // Current nesting depth
+	maxDepth       int                            // Maximum allowed depth
+	rand           *rand.Rand                     // Random number generator (seeded for determinism)
+	fieldOverrides map[string]interface{}         // Field name to value overrides
 }
 
 // GenerateExamples generates JSON examples for specified schemas
-func GenerateExamples(entries []*parser.SchemaEntry, schemaNames []string, maxDepth int, seed int64) (map[string]json.RawMessage, error) {
+func GenerateExamples(entries []*parser.SchemaEntry, schemaNames []string, maxDepth int, seed int64, fieldOverrides map[string]interface{}) (map[string]json.RawMessage, error) {
 	schemaMap := make(map[string]*parser.SchemaEntry)
 	for _, entry := range entries {
 		schemaMap[entry.Name] = entry
 	}
 
 	ctx := &ExampleContext{
-		schemas:  schemaMap,
-		path:     make([]string, 0),
-		depth:    0,
-		maxDepth: maxDepth,
-		rand:     rand.New(rand.NewSource(seed)),
+		schemas:        schemaMap,
+		path:           make([]string, 0),
+		depth:          0,
+		maxDepth:       maxDepth,
+		rand:           rand.New(rand.NewSource(seed)),
+		fieldOverrides: fieldOverrides,
 	}
 
 	targetSchemas := entries
@@ -155,7 +157,7 @@ func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleCo
 		if schema.Minimum != nil || schema.Maximum != nil {
 			return ctx.rand.Intn(max-min+1) + min, nil
 		}
-		return 0, nil
+		return ctx.rand.Intn(100) + 1, nil
 
 	case "number":
 		min := 0.0
@@ -174,7 +176,7 @@ func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleCo
 		if schema.Minimum != nil || schema.Maximum != nil {
 			return ctx.rand.Float64()*(max-min) + min, nil
 		}
-		return 0.0, nil
+		return ctx.rand.Float64()*99.0 + 1.0, nil
 
 	case "string":
 		return generateStringValue(schema, format, ctx)

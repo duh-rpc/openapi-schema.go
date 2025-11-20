@@ -1205,3 +1205,139 @@ components:
 		})
 	}
 }
+
+func TestConvertToExamplesFieldOverrides(t *testing.T) {
+	openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+`
+
+	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+		SchemaNames:    []string{"ErrorResponse"},
+		Seed:           42,
+		FieldOverrides: map[string]interface{}{"code": 400},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, result.Examples, "ErrorResponse")
+
+	var value map[string]interface{}
+	err = json.Unmarshal(result.Examples["ErrorResponse"], &value)
+	require.NoError(t, err)
+
+	require.Contains(t, value, "code")
+	require.Contains(t, value, "message")
+}
+
+func TestConvertToExamplesRandomDefaults(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "integer without constraints generates random 1-100",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        quantity:
+          type: integer
+`,
+			schema: "Product",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "quantity")
+				quantity := int(m["quantity"].(float64))
+				assert.GreaterOrEqual(t, quantity, 1)
+				assert.LessOrEqual(t, quantity, 100)
+				assert.NotEqual(t, 0, quantity)
+			},
+		},
+		{
+			name: "number without constraints generates random 1.0-100.0",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Price:
+      type: object
+      properties:
+        amount:
+          type: number
+`,
+			schema: "Price",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "amount")
+				amount := m["amount"].(float64)
+				assert.GreaterOrEqual(t, amount, 1.0)
+				assert.LessOrEqual(t, amount, 100.0)
+				assert.NotEqual(t, 0.0, amount)
+			},
+		},
+		{
+			name: "deterministic with fixed seed",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Data:
+      type: object
+      properties:
+        count:
+          type: integer
+        value:
+          type: number
+`,
+			schema: "Data",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "count")
+				require.Contains(t, m, "value")
+				count := int(m["count"].(float64))
+				valueNum := m["value"].(float64)
+				assert.GreaterOrEqual(t, count, 1)
+				assert.LessOrEqual(t, count, 100)
+				assert.GreaterOrEqual(t, valueNum, 1.0)
+				assert.LessOrEqual(t, valueNum, 100.0)
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
