@@ -295,7 +295,14 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 	}
 
 	if len(schema.Type) > 0 && contains(schema.Type, "object") {
-		return generateObjectExample(schema, propertyName, ctx)
+		obj, err := generateObjectExample(schema, propertyName, ctx)
+		if err != nil {
+			return nil, err
+		}
+		if obj == nil {
+			return nil, nil
+		}
+		return obj, nil
 	}
 
 	if isEnumSchema(schema) {
