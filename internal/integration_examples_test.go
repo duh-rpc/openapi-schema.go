@@ -699,9 +699,9 @@ components:
 			"status": "active",
 			"articleCount": 189
 		},
-		"tags": ["g7W9LLxq2z"],
+		"tags": ["7W9LLxq2zG", "NO6q1Xh3S7", "gYekwHUMGh", "WzGpld7aFP", "fYJK6SV75a"],
 		"publishedAt": "2024-01-15T10:30:00Z",
-		"isPublished": false,
+		"isPublished": true,
 		"viewCount": 0
 	}`
 	assert.JSONEq(t, expectedArticle, string(result.Examples["Article"]))

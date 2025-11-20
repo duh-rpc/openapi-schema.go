@@ -345,10 +345,16 @@ func generateArrayExample(schema *base.Schema, propertyName string, ctx *Example
 		ctx.depth--
 	}()
 
-	itemProxy := schema.Items.A
-	result := make([]interface{}, 0, minItems)
+	// Generate random number of items between minItems and maxItems
+	numItems := minItems
+	if maxItems > minItems {
+		numItems = ctx.rand.Intn(maxItems-minItems+1) + minItems
+	}
 
-	for i := 0; i < minItems; i++ {
+	itemProxy := schema.Items.A
+	result := make([]interface{}, 0, numItems)
+
+	for i := 0; i < numItems; i++ {
 		itemValue, err := generatePropertyValue(propertyName, itemProxy, ctx)
 		if err != nil {
 			return nil, err

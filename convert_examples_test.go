@@ -34,7 +34,7 @@ paths: {}
 			wantErr: "must specify SchemaNames or set IncludeAll",
 		},
 		{
-			name: "invalid openapi document",
+			name:    "invalid openapi document",
 			openapi: []byte(`this is not valid: [yaml`),
 			opts:    conv.ExampleOptions{IncludeAll: true},
 			wantErr: "failed to parse OpenAPI document",
@@ -1344,33 +1344,33 @@ components:
 
 func TestConvertToExamplesCursorHeuristics(t *testing.T) {
 	for _, test := range []struct {
-		name       string
-		fieldName  string
+		name        string
+		fieldName   string
 		shouldMatch bool
 	}{
 		{
-			name:       "cursor field lowercase",
-			fieldName:  "cursor",
+			name:        "cursor field lowercase",
+			fieldName:   "cursor",
 			shouldMatch: true,
 		},
 		{
-			name:       "first field lowercase",
-			fieldName:  "first",
+			name:        "first field lowercase",
+			fieldName:   "first",
 			shouldMatch: true,
 		},
 		{
-			name:       "after field lowercase",
-			fieldName:  "after",
+			name:        "after field lowercase",
+			fieldName:   "after",
 			shouldMatch: true,
 		},
 		{
-			name:       "Cursor field capitalized",
-			fieldName:  "Cursor",
+			name:        "Cursor field capitalized",
+			fieldName:   "Cursor",
 			shouldMatch: true,
 		},
 		{
-			name:       "other field does not match",
-			fieldName:  "other",
+			name:        "other field does not match",
+			fieldName:   "other",
 			shouldMatch: false,
 		},
 	} {
@@ -1422,32 +1422,32 @@ components:
 
 func TestConvertToExamplesMessageHeuristics(t *testing.T) {
 	for _, test := range []struct {
-		name       string
-		fieldName  string
-		expected   string
+		name        string
+		fieldName   string
+		expected    string
 		shouldMatch bool
 	}{
 		{
-			name:       "error field lowercase",
-			fieldName:  "error",
-			expected:   "An error occurred",
+			name:        "error field lowercase",
+			fieldName:   "error",
+			expected:    "An error occurred",
 			shouldMatch: true,
 		},
 		{
-			name:       "message field lowercase",
-			fieldName:  "message",
-			expected:   "This is a message",
+			name:        "message field lowercase",
+			fieldName:   "message",
+			expected:    "This is a message",
 			shouldMatch: true,
 		},
 		{
-			name:       "Error field capitalized",
-			fieldName:  "Error",
-			expected:   "An error occurred",
+			name:        "Error field capitalized",
+			fieldName:   "Error",
+			expected:    "An error occurred",
 			shouldMatch: true,
 		},
 		{
-			name:       "description field does not match",
-			fieldName:  "description",
+			name:        "description field does not match",
+			fieldName:   "description",
 			shouldMatch: false,
 		},
 	} {
@@ -1490,10 +1490,10 @@ components:
 
 func TestConvertToExamplesFieldOverridePriority(t *testing.T) {
 	for _, test := range []struct {
-		name       string
-		openapi    string
-		overrides  map[string]interface{}
-		validate   func(t *testing.T, value map[string]interface{})
+		name      string
+		openapi   string
+		overrides map[string]interface{}
+		validate  func(t *testing.T, value map[string]interface{})
 	}{
 		{
 			name: "override takes precedence over heuristics",

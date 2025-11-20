@@ -48,10 +48,10 @@ type ExampleResult struct {
 
 // ExampleOptions configures JSON example generation
 type ExampleOptions struct {
-	SchemaNames    []string               // Specific schemas to generate (ignored if IncludeAll is true)
-	MaxDepth       int                    // Maximum nesting depth (default 5)
-	IncludeAll     bool                   // If true, generate examples for all schemas (takes precedence over SchemaNames)
-	Seed           int64                  // Random seed for deterministic generation (0 = use time-based seed)
+	SchemaNames []string // Specific schemas to generate (ignored if IncludeAll is true)
+	MaxDepth    int      // Maximum nesting depth (default 5)
+	IncludeAll  bool     // If true, generate examples for all schemas (takes precedence over SchemaNames)
+	Seed        int64    // Random seed for deterministic generation (0 = use time-based seed)
 	// FieldOverrides allows overriding generated values for specific field names (e.g., {"code": 400, "status": "error"}).
 	// - Applies to any field with matching name (case-sensitive) across all schemas
 	// - Takes precedence over heuristics and generated values
