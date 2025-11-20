@@ -598,3 +598,136 @@ components:
 	userId := strict["userId"].(string)
 	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, userId)
 }
+
+// TestCompleteExample shows a full end-to-end example with input OpenAPI and complete JSON output
+func TestCompleteExample(t *testing.T) {
+	openapi := []byte(`openapi: 3.0.0
+info:
+  title: Blog API
+  version: 1.0.0
+components:
+  schemas:
+    AuthorStatus:
+      type: string
+      enum:
+        - active
+        - inactive
+    Author:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        status:
+          $ref: '#/components/schemas/AuthorStatus'
+        articleCount:
+          type: integer
+          minimum: 0
+          maximum: 1000
+    Article:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 5
+          maxLength: 100
+        content:
+          type: string
+          minLength: 10
+        author:
+          $ref: '#/components/schemas/Author'
+        tags:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 5
+        publishedAt:
+          type: string
+          format: date-time
+        isPublished:
+          type: boolean
+        viewCount:
+          type: integer
+          minimum: 0
+          default: 0
+`)
+
+	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+		IncludeAll: true,
+		MaxDepth:   5,
+		Seed:       42,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Len(t, result.Examples, 3)
+	assert.Contains(t, result.Examples, "AuthorStatus")
+	assert.Contains(t, result.Examples, "Author")
+	assert.Contains(t, result.Examples, "Article")
+
+	expectedAuthorStatus := `"active"`
+	assert.JSONEq(t, expectedAuthorStatus, string(result.Examples["AuthorStatus"]))
+
+	expectedAuthor := `{
+		"id": "123e4567-e89b-12d3-a456-426614174000",
+		"name": "l2INvNSQTZ5zQu9MxNmGy",
+		"email": "user@example.com",
+		"status": "active",
+		"articleCount": 614
+	}`
+	assert.JSONEq(t, expectedAuthor, string(result.Examples["Author"]))
+
+	expectedArticle := `{
+		"id": "123e4567-e89b-12d3-a456-426614174000",
+		"title": "mNkB33ionwj2qrsh3xyC8OmCp1gObD0i",
+		"content": "OtQNQsLiFD",
+		"author": {
+			"id": "123e4567-e89b-12d3-a456-426614174000",
+			"name": "MY7O3gDk8",
+			"email": "user@example.com",
+			"status": "active",
+			"articleCount": 189
+		},
+		"tags": ["g7W9LLxq2z"],
+		"publishedAt": "2024-01-15T10:30:00Z",
+		"isPublished": false,
+		"viewCount": 0
+	}`
+	assert.JSONEq(t, expectedArticle, string(result.Examples["Article"]))
+
+	var article map[string]interface{}
+	err = json.Unmarshal(result.Examples["Article"], &article)
+	require.NoError(t, err)
+
+	title := article["title"].(string)
+	assert.GreaterOrEqual(t, len(title), 5)
+	assert.LessOrEqual(t, len(title), 100)
+
+	content := article["content"].(string)
+	assert.GreaterOrEqual(t, len(content), 10)
+
+	tags := article["tags"].([]interface{})
+	assert.GreaterOrEqual(t, len(tags), 1)
+	assert.LessOrEqual(t, len(tags), 5)
+
+	assert.Equal(t, float64(0), article["viewCount"])
+
+	author := article["author"].(map[string]interface{})
+	assert.Equal(t, "active", author["status"])
+	assert.Equal(t, "user@example.com", author["email"])
+
+	articleCount := int(author["articleCount"].(float64))
+	assert.GreaterOrEqual(t, articleCount, 0)
+	assert.LessOrEqual(t, articleCount, 1000)
+}
