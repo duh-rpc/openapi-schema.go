@@ -177,7 +177,7 @@ func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleCo
 		return 0.0, nil
 
 	case "string":
-		return "example", nil
+		return generateStringValue(schema, format, ctx)
 
 	case "boolean":
 		return ctx.rand.Intn(2) == 1, nil
@@ -185,6 +185,72 @@ func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleCo
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", typ)
 	}
+}
+
+// generateStringValue generates string value honoring format and length constraints
+func generateStringValue(schema *base.Schema, format string, ctx *ExampleContext) (string, error) {
+	var minLength int
+	var maxLength int
+
+	if schema.MinLength != nil {
+		minLength = int(*schema.MinLength)
+	}
+
+	if schema.MaxLength != nil {
+		maxLength = int(*schema.MaxLength)
+	}
+
+	if minLength > 0 && maxLength > 0 && minLength > maxLength {
+		return "", fmt.Errorf("invalid schema: minLength > maxLength")
+	}
+
+	var template string
+
+	switch format {
+	case "email":
+		template = "user@example.com"
+	case "uuid":
+		template = "123e4567-e89b-12d3-a456-426614174000"
+	case "uri", "url":
+		template = "https://example.com"
+	case "date":
+		template = "2024-01-15"
+	case "date-time":
+		template = "2024-01-15T10:30:00Z"
+	case "hostname":
+		template = "example.com"
+	default:
+		length := 10
+		if minLength > 0 {
+			if maxLength > 0 {
+				length = ctx.rand.Intn(maxLength-minLength+1) + minLength
+			} else {
+				length = minLength
+			}
+		} else if maxLength > 0 {
+			length = ctx.rand.Intn(maxLength + 1)
+		}
+
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		result := make([]byte, length)
+		for i := range result {
+			result[i] = charset[ctx.rand.Intn(len(charset))]
+		}
+		return string(result), nil
+	}
+
+	if minLength > 0 && len(template) < minLength {
+		padding := minLength - len(template)
+		for i := 0; i < padding; i++ {
+			template += "x"
+		}
+	}
+
+	if maxLength > 0 && len(template) > maxLength {
+		template = template[:maxLength]
+	}
+
+	return template, nil
 }
 
 // generateArrayExample generates example for array schema
