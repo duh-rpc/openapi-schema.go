@@ -1,7 +1,9 @@
 package conv
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/duh-rpc/openapi-proto.go/internal"
 	"github.com/duh-rpc/openapi-proto.go/internal/parser"
@@ -37,6 +39,19 @@ type ConvertResult struct {
 type StructResult struct {
 	Golang  []byte
 	TypeMap map[string]*TypeInfo
+}
+
+// ExampleResult contains generated JSON examples for schemas
+type ExampleResult struct {
+	Examples map[string]json.RawMessage // schema name → JSON example
+}
+
+// ExampleOptions configures JSON example generation
+type ExampleOptions struct {
+	SchemaNames []string // Specific schemas to generate (ignored if IncludeAll is true)
+	MaxDepth    int      // Maximum nesting depth (default 5)
+	IncludeAll  bool     // If true, generate examples for all schemas (takes precedence over SchemaNames)
+	Seed        int64    // Random seed for deterministic generation (0 = use time-based seed)
 }
 
 // TypeInfo contains metadata about where a type is generated and why
@@ -322,4 +337,47 @@ func filterProtoDefinitions(definitions []interface{}, protoTypes map[string]boo
 	}
 
 	return filtered
+}
+
+// ConvertToExamples generates JSON examples from OpenAPI schemas
+func ConvertToExamples(openapi []byte, opts ExampleOptions) (*ExampleResult, error) {
+	if len(openapi) == 0 {
+		return nil, fmt.Errorf("openapi input cannot be empty")
+	}
+
+	if opts.MaxDepth <= 0 {
+		opts.MaxDepth = 5
+	}
+
+	if !opts.IncludeAll && len(opts.SchemaNames) == 0 {
+		return nil, fmt.Errorf("must specify SchemaNames or set IncludeAll")
+	}
+
+	if opts.Seed == 0 {
+		opts.Seed = time.Now().UnixNano()
+	}
+
+	doc, err := parser.ParseDocument(openapi)
+	if err != nil {
+		return nil, err
+	}
+
+	schemas, err := doc.Schemas()
+	if err != nil {
+		return nil, err
+	}
+
+	schemaNames := opts.SchemaNames
+	if opts.IncludeAll {
+		schemaNames = nil
+	}
+
+	examples, err := internal.GenerateExamples(schemas, schemaNames, opts.MaxDepth, opts.Seed)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ExampleResult{
+		Examples: examples,
+	}, nil
 }
