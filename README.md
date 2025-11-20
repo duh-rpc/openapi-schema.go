@@ -65,6 +65,64 @@ func main() {
 }
 ```
 
+### Go-Only Conversion
+
+If you need Go struct types without Protocol Buffer definitions, use `ConvertToStruct()` to generate pure Go code:
+
+```go
+package main
+
+import (
+    "fmt"
+    "os"
+
+    conv "github.com/duh-rpc/openapi-proto.go"
+)
+
+func main() {
+    // Read OpenAPI specification
+    openapi, err := os.ReadFile("api.yaml")
+    if err != nil {
+        panic(err)
+    }
+
+    // Convert ALL schemas to Go structs (no protobuf)
+    result, err := conv.ConvertToStruct(openapi, conv.ConvertOptions{
+        GoPackagePath: "github.com/example/types/v1",
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    // Write Go file
+    err = os.WriteFile("types.go", result.Golang, 0644)
+    if err != nil {
+        panic(err)
+    }
+
+    // TypeMap shows all types as Go structs
+    for typeName, info := range result.TypeMap {
+        fmt.Printf("%s: %s (%s)\n", typeName, info.Location, info.Reason)
+    }
+}
+```
+
+**Key Differences from `Convert()`:**
+
+| Feature | `Convert()` | `ConvertToStruct()` |
+|---------|-------------|---------------------|
+| Output | Proto + Go (for unions) | Go only |
+| Type classification | Transitive closure filtering | All schemas become Go |
+| Union handling | Custom marshaling | Custom marshaling |
+| Regular types | Proto messages | Go structs with JSON tags |
+| Use case | Dual proto/Go interface | Pure Go types |
+
+**When to use `ConvertToStruct()`:**
+- You need Go types but not protobuf definitions
+- You want all schemas as Go structs for a consistent API
+- You're building a pure Go application without gRPC
+- You want simpler type management (everything in one Go file)
+
 ### Input: OpenAPI 3.x YAML
 
 ```yaml
@@ -217,7 +275,7 @@ type Cat struct {
 
 ### Using ConvertResult and TypeMap
 
-When schemas contain unions, `Convert()` returns a `ConvertResult` with separate proto and Go outputs:
+When schemas contain unions, `Convert()` returns a `ConvertResult` with separate proto and Go outputs. Similarly, `ConvertToStruct()` returns a `StructResult` with Go-only output:
 
 ```go
 result, err := conv.Convert(openapi, conv.ConvertOptions{
