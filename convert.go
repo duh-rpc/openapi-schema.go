@@ -46,6 +46,41 @@ type ExampleResult struct {
 	Examples map[string]json.RawMessage // schema name → JSON example
 }
 
+// ValidationResult contains the validation status for all examples in an OpenAPI spec
+type ValidationResult struct {
+	Schemas map[string]*SchemaValidationResult
+}
+
+// SchemaValidationResult contains validation details for a single schema
+type SchemaValidationResult struct {
+	SchemaPath  string
+	HasExamples bool
+	Valid       bool
+	Issues      []ValidationIssue
+}
+
+// ValidationIssue represents a single validation error or warning
+type ValidationIssue struct {
+	Severity     IssueSeverity
+	ExampleField string
+	Message      string
+	Line         int
+}
+
+// IssueSeverity indicates whether an issue is an error or warning
+type IssueSeverity string
+
+const (
+	IssueSeverityError   IssueSeverity = "error"
+	IssueSeverityWarning IssueSeverity = "warning"
+)
+
+// ValidateOptions configures example validation
+type ValidateOptions struct {
+	SchemaNames []string // Specific schemas to validate (ignored if IncludeAll is true)
+	IncludeAll  bool     // If true, validate all schemas (takes precedence over SchemaNames)
+}
+
 // ExampleOptions configures JSON example generation
 type ExampleOptions struct {
 	SchemaNames []string // Specific schemas to generate (ignored if IncludeAll is true)
@@ -386,4 +421,67 @@ func ConvertToExamples(openapi []byte, opts ExampleOptions) (*ExampleResult, err
 	return &ExampleResult{
 		Examples: examples,
 	}, nil
+}
+
+// ValidateExamples validates examples in OpenAPI spec against schemas.
+// It validates the 'example' and 'examples' fields in Schema Objects under components/schemas.
+//
+// For schemas with the 'examples' map, all entries are validated.
+// If both 'example' and 'examples' exist on the same schema, both are validated.
+//
+// Parameters:
+//   - openapi: OpenAPI specification bytes (YAML or JSON)
+//   - opts: Validation options (SchemaNames to filter specific schemas, or IncludeAll to validate all)
+//
+// Returns:
+//   - ValidationResult containing per-schema validation results with errors and warnings
+//
+// Returns an error if:
+//   - openapi is empty
+//   - opts.IncludeAll is false and opts.SchemaNames is empty
+//   - the OpenAPI document is invalid or not version 3.x
+func ValidateExamples(openapi []byte, opts ValidateOptions) (*ValidationResult, error) {
+	if len(openapi) == 0 {
+		return nil, fmt.Errorf("openapi input cannot be empty")
+	}
+
+	if !opts.IncludeAll && len(opts.SchemaNames) == 0 {
+		return nil, fmt.Errorf("must specify SchemaNames or set IncludeAll")
+	}
+
+	schemaNames := opts.SchemaNames
+	if opts.IncludeAll {
+		schemaNames = nil
+	}
+
+	internalResult, err := internal.ValidateExamples(openapi, schemaNames)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert internal result to public API types
+	result := &ValidationResult{
+		Schemas: make(map[string]*SchemaValidationResult),
+	}
+
+	for schemaName, schemaValidation := range internalResult.Schemas {
+		issues := make([]ValidationIssue, len(schemaValidation.Issues))
+		for i, issue := range schemaValidation.Issues {
+			issues[i] = ValidationIssue{
+				Severity:     IssueSeverity(issue.Severity),
+				ExampleField: issue.ExampleField,
+				Message:      issue.Message,
+				Line:         issue.Line,
+			}
+		}
+
+		result.Schemas[schemaName] = &SchemaValidationResult{
+			SchemaPath:  schemaValidation.SchemaPath,
+			HasExamples: schemaValidation.HasExamples,
+			Valid:       schemaValidation.Valid,
+			Issues:      issues,
+		}
+	}
+
+	return result, nil
 }
