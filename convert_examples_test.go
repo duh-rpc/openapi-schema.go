@@ -1341,3 +1341,149 @@ components:
 		})
 	}
 }
+
+func TestConvertToExamplesCursorHeuristics(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		fieldName  string
+		shouldMatch bool
+	}{
+		{
+			name:       "cursor field lowercase",
+			fieldName:  "cursor",
+			shouldMatch: true,
+		},
+		{
+			name:       "first field lowercase",
+			fieldName:  "first",
+			shouldMatch: true,
+		},
+		{
+			name:       "after field lowercase",
+			fieldName:  "after",
+			shouldMatch: true,
+		},
+		{
+			name:       "Cursor field capitalized",
+			fieldName:  "Cursor",
+			shouldMatch: true,
+		},
+		{
+			name:       "other field does not match",
+			fieldName:  "other",
+			shouldMatch: false,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        ` + test.fieldName + `:
+          type: string
+`
+			result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+				SchemaNames: []string{"Pagination"},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, "Pagination")
+
+			var value map[string]interface{}
+			err = json.Unmarshal(result.Examples["Pagination"], &value)
+			require.NoError(t, err)
+			require.Contains(t, value, test.fieldName)
+
+			fieldValue := value[test.fieldName].(string)
+
+			if test.shouldMatch {
+				assert.GreaterOrEqual(t, len(fieldValue), 16)
+				assert.LessOrEqual(t, len(fieldValue), 32)
+
+				for _, ch := range fieldValue {
+					valid := (ch >= 'a' && ch <= 'z') ||
+						(ch >= 'A' && ch <= 'Z') ||
+						(ch >= '0' && ch <= '9') ||
+						ch == '+' || ch == '/'
+					assert.True(t, valid)
+				}
+			} else {
+				assert.Len(t, fieldValue, 10)
+			}
+		})
+	}
+}
+
+func TestConvertToExamplesMessageHeuristics(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		fieldName  string
+		expected   string
+		shouldMatch bool
+	}{
+		{
+			name:       "error field lowercase",
+			fieldName:  "error",
+			expected:   "An error occurred",
+			shouldMatch: true,
+		},
+		{
+			name:       "message field lowercase",
+			fieldName:  "message",
+			expected:   "This is a message",
+			shouldMatch: true,
+		},
+		{
+			name:       "Error field capitalized",
+			fieldName:  "Error",
+			expected:   "An error occurred",
+			shouldMatch: true,
+		},
+		{
+			name:       "description field does not match",
+			fieldName:  "description",
+			shouldMatch: false,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Response:
+      type: object
+      properties:
+        ` + test.fieldName + `:
+          type: string
+`
+			result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+				SchemaNames: []string{"Response"},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, "Response")
+
+			var value map[string]interface{}
+			err = json.Unmarshal(result.Examples["Response"], &value)
+			require.NoError(t, err)
+			require.Contains(t, value, test.fieldName)
+
+			fieldValue := value[test.fieldName].(string)
+
+			if test.shouldMatch {
+				assert.Equal(t, test.expected, fieldValue)
+			} else {
+				assert.Len(t, fieldValue, 10)
+			}
+		})
+	}
+}

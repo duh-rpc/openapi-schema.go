@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 
 	"github.com/duh-rpc/openapi-proto.go/internal/parser"
 	"github.com/pb33f/libopenapi/datamodel/high/base"
@@ -126,11 +127,11 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 	typ := schema.Type[0]
 	format := schema.Format
 
-	return generateScalarValue(schema, typ, format, ctx)
+	return generateScalarValue(name, schema, typ, format, ctx)
 }
 
 // generateScalarValue generates a value for a scalar type with constraints
-func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleContext) (interface{}, error) {
+func generateScalarValue(fieldName string, schema *base.Schema, typ, format string, ctx *ExampleContext) (interface{}, error) {
 	if schema.Example != nil {
 		return extractYAMLNodeValue(schema.Example), nil
 	}
@@ -179,7 +180,7 @@ func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleCo
 		return ctx.rand.Float64()*99.0 + 1.0, nil
 
 	case "string":
-		return generateStringValue(schema, format, ctx)
+		return generateStringValue(fieldName, schema, format, ctx)
 
 	case "boolean":
 		return ctx.rand.Intn(2) == 1, nil
@@ -190,7 +191,7 @@ func generateScalarValue(schema *base.Schema, typ, format string, ctx *ExampleCo
 }
 
 // generateStringValue generates string value honoring format and length constraints
-func generateStringValue(schema *base.Schema, format string, ctx *ExampleContext) (string, error) {
+func generateStringValue(fieldName string, schema *base.Schema, format string, ctx *ExampleContext) (string, error) {
 	var minLength int
 	var maxLength int
 
@@ -204,6 +205,25 @@ func generateStringValue(schema *base.Schema, format string, ctx *ExampleContext
 
 	if minLength > 0 && maxLength > 0 && minLength > maxLength {
 		return "", fmt.Errorf("invalid schema: minLength > maxLength")
+	}
+
+	lowerFieldName := strings.ToLower(fieldName)
+	if lowerFieldName == "cursor" || lowerFieldName == "first" || lowerFieldName == "after" {
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/"
+		length := ctx.rand.Intn(17) + 16
+		result := make([]byte, length)
+		for i := range result {
+			result[i] = charset[ctx.rand.Intn(len(charset))]
+		}
+		return string(result), nil
+	}
+
+	if lowerFieldName == "error" {
+		return "An error occurred", nil
+	}
+
+	if lowerFieldName == "message" {
+		return "This is a message", nil
 	}
 
 	var template string
@@ -386,7 +406,7 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 	typ := schema.Type[0]
 	format := schema.Format
 
-	return generateScalarValue(schema, typ, format, ctx)
+	return generateScalarValue(propertyName, schema, typ, format, ctx)
 }
 
 // extractYAMLNodeValue extracts the actual value from a yaml.Node
