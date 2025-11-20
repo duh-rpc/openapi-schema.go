@@ -123,6 +123,127 @@ func main() {
 - You're building a pure Go application without gRPC
 - You want simpler type management (everything in one Go file)
 
+### JSON Example Generation
+
+Generate JSON examples from OpenAPI schemas for documentation, testing, or API design. The `ConvertToExamples()` function creates realistic examples that honor schema constraints like min/max values, string formats, enums, and required fields.
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+
+    conv "github.com/duh-rpc/openapi-proto.go"
+)
+
+func main() {
+    openapi := []byte(`openapi: 3.0.0
+info:
+  title: User API
+  version: 1.0.0
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        age:
+          type: integer
+          minimum: 18
+          maximum: 120
+        status:
+          type: string
+          enum: [active, inactive]
+`)
+
+    // Generate examples for all schemas
+    result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+        IncludeAll: true,
+        MaxDepth:   5,
+        Seed:       12345, // For deterministic generation
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    // Access generated examples
+    userJSON := result.Examples["User"]
+    fmt.Printf("User example: %s\n", string(userJSON))
+
+    // Or unmarshal to validate structure
+    var user map[string]interface{}
+    json.Unmarshal(userJSON, &user)
+    fmt.Printf("Email: %s, Age: %d\n", user["email"], int(user["age"].(float64)))
+}
+```
+
+**Example output:**
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "email": "user@example.com",
+  "age": 42,
+  "status": "active"
+}
+```
+
+**ExampleOptions:**
+- `IncludeAll`: Generate examples for all schemas (takes precedence over SchemaNames)
+- `SchemaNames`: Specific schemas to generate examples for (used when IncludeAll is false)
+- `MaxDepth`: Maximum nesting depth for circular references (default: 5)
+- `Seed`: Random seed for deterministic generation (0 = time-based randomness)
+
+**Constraint Handling:**
+
+The example generator honors OpenAPI schema constraints:
+
+| Constraint | Behavior |
+|------------|----------|
+| `minimum` / `maximum` | Generates numbers within range |
+| `minLength` / `maxLength` | Generates strings within length limits |
+| `minItems` / `maxItems` | Generates arrays within item count limits |
+| `enum` | Picks first value for deterministic output |
+| `format` | Generates format-specific values (email, uuid, uri, date, date-time) |
+| `default` | Uses default value if specified |
+| `example` | Uses example value if specified (highest priority) |
+
+**Circular Reference Handling:**
+
+Circular references are automatically detected and broken to prevent infinite recursion:
+
+```go
+// Schema with circular reference
+openapi := []byte(`openapi: 3.0.0
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        name:
+          type: string
+        friends:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+`)
+
+result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    IncludeAll: true,
+    MaxDepth:   3, // Limit nesting depth
+})
+// The 'friends' array will be generated but nested User objects
+// will be omitted once the depth limit is reached
+```
+
+**See [docs/examples.md](docs/examples.md) for detailed documentation.**
+
 ### Input: OpenAPI 3.x YAML
 
 ```yaml
