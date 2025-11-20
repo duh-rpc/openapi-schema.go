@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -138,6 +139,47 @@ func generateScalarValue(fieldName string, schema *base.Schema, typ, format stri
 
 	if schema.Default != nil {
 		return extractYAMLNodeValue(schema.Default), nil
+	}
+
+	// Check field overrides (after Example and Default, before type generation)
+	if ctx.fieldOverrides != nil {
+		if overrideValue, ok := ctx.fieldOverrides[fieldName]; ok {
+			// Validate type matches schema type
+			switch typ {
+			case "integer":
+				switch v := overrideValue.(type) {
+				case int:
+					return v, nil
+				case float64:
+					// JSON unmarshaling produces float64 for all numbers
+					if math.Mod(v, 1.0) == 0 {
+						return int(v), nil
+					}
+					return nil, fmt.Errorf("field override for '%s' has wrong type: expected integer, got float with decimal", fieldName)
+				default:
+					return nil, fmt.Errorf("field override for '%s' has wrong type: expected integer, got %T", fieldName, overrideValue)
+				}
+			case "number":
+				switch v := overrideValue.(type) {
+				case int:
+					return float64(v), nil
+				case float64:
+					return v, nil
+				default:
+					return nil, fmt.Errorf("field override for '%s' has wrong type: expected number, got %T", fieldName, overrideValue)
+				}
+			case "string":
+				if v, ok := overrideValue.(string); ok {
+					return v, nil
+				}
+				return nil, fmt.Errorf("field override for '%s' has wrong type: expected string, got %T", fieldName, overrideValue)
+			case "boolean":
+				if v, ok := overrideValue.(bool); ok {
+					return v, nil
+				}
+				return nil, fmt.Errorf("field override for '%s' has wrong type: expected boolean, got %T", fieldName, overrideValue)
+			}
+		}
 	}
 
 	switch typ {

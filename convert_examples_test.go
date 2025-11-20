@@ -1487,3 +1487,219 @@ components:
 		})
 	}
 }
+
+func TestConvertToExamplesFieldOverridePriority(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		openapi    string
+		overrides  map[string]interface{}
+		validate   func(t *testing.T, value map[string]interface{})
+	}{
+		{
+			name: "override takes precedence over heuristics",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Response:
+      type: object
+      properties:
+        message:
+          type: string
+`,
+			overrides: map[string]interface{}{"message": "custom message"},
+			validate: func(t *testing.T, value map[string]interface{}) {
+				require.Contains(t, value, "message")
+				assert.Equal(t, "custom message", value["message"])
+			},
+		},
+		{
+			name: "schema example takes precedence over override",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Response:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+`,
+			overrides: map[string]interface{}{"code": 400},
+			validate: func(t *testing.T, value map[string]interface{}) {
+				require.Contains(t, value, "code")
+				code := value["code"].(float64)
+				assert.Equal(t, 200.0, code)
+			},
+		},
+		{
+			name: "schema default takes precedence over override",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Config:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: false
+`,
+			overrides: map[string]interface{}{"enabled": true},
+			validate: func(t *testing.T, value map[string]interface{}) {
+				require.Contains(t, value, "enabled")
+				assert.Equal(t, false, value["enabled"])
+			},
+		},
+		{
+			name: "multiple field overrides",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        status:
+          type: string
+        message:
+          type: string
+`,
+			overrides: map[string]interface{}{
+				"code":    500,
+				"status":  "error",
+				"message": "Internal server error",
+			},
+			validate: func(t *testing.T, value map[string]interface{}) {
+				require.Contains(t, value, "code")
+				require.Contains(t, value, "status")
+				require.Contains(t, value, "message")
+				code := value["code"].(float64)
+				assert.Equal(t, 500.0, code)
+				assert.Equal(t, "error", value["status"])
+				assert.Equal(t, "Internal server error", value["message"])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+				FieldOverrides: test.overrides,
+				IncludeAll:     true,
+				Seed:           42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			var value map[string]interface{}
+			schemaName := ""
+			for name := range result.Examples {
+				schemaName = name
+				break
+			}
+			require.NotEmpty(t, schemaName)
+
+			err = json.Unmarshal(result.Examples[schemaName], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
+func TestConvertToExamplesFieldOverrideTypeMismatch(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		openapi   string
+		overrides map[string]interface{}
+		wantErr   string
+	}{
+		{
+			name: "string value for integer field",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Response:
+      type: object
+      properties:
+        code:
+          type: integer
+`,
+			overrides: map[string]interface{}{"code": "not a number"},
+			wantErr:   "field override for 'code' has wrong type",
+		},
+		{
+			name: "integer value for string field",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Response:
+      type: object
+      properties:
+        message:
+          type: string
+`,
+			overrides: map[string]interface{}{"message": 123},
+			wantErr:   "field override for 'message' has wrong type",
+		},
+		{
+			name: "string value for boolean field",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Config:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+`,
+			overrides: map[string]interface{}{"enabled": "true"},
+			wantErr:   "field override for 'enabled' has wrong type",
+		},
+		{
+			name: "float with decimal for integer field",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Data:
+      type: object
+      properties:
+        count:
+          type: integer
+`,
+			overrides: map[string]interface{}{"count": 42.5},
+			wantErr:   "field override for 'count' has wrong type",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+				FieldOverrides: test.overrides,
+				IncludeAll:     true,
+				Seed:           42,
+			})
+			require.ErrorContains(t, err, test.wantErr)
+		})
+	}
+}

@@ -52,7 +52,12 @@ type ExampleOptions struct {
 	MaxDepth       int                    // Maximum nesting depth (default 5)
 	IncludeAll     bool                   // If true, generate examples for all schemas (takes precedence over SchemaNames)
 	Seed           int64                  // Random seed for deterministic generation (0 = use time-based seed)
-	FieldOverrides map[string]interface{} // Override values for specific field names (e.g., {"code": 400})
+	// FieldOverrides allows overriding generated values for specific field names (e.g., {"code": 400, "status": "error"}).
+	// - Applies to any field with matching name (case-sensitive) across all schemas
+	// - Takes precedence over heuristics and generated values
+	// - Does NOT override schema.Example or schema.Default (those have higher precedence)
+	// - Type must match schema type or error is returned
+	FieldOverrides map[string]interface{}
 }
 
 // TypeInfo contains metadata about where a type is generated and why
