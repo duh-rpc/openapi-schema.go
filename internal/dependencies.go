@@ -119,6 +119,11 @@ func (g *DependencyGraph) ComputeTransitiveClosure() (goTypes, protoTypes map[st
 	return goTypes, protoTypes, reasons
 }
 
+// Schemas returns the schemas map for external package access
+func (g *DependencyGraph) Schemas() map[string]*base.SchemaProxy {
+	return g.schemas
+}
+
 // ExtractVariantNames extracts schema names from oneOf variant references
 func ExtractVariantNames(oneOf []*base.SchemaProxy) []string {
 	variants := make([]string, 0, len(oneOf))

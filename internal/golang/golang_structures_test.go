@@ -1,4 +1,4 @@
-package internal_test
+package golang_test
 
 import (
 	"testing"

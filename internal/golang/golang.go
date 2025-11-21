@@ -1,10 +1,11 @@
-package internal
+package golang
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/duh-rpc/openapi-schema.go/internal"
 	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 	"github.com/pb33f/libopenapi/datamodel/high/base"
 )
@@ -31,7 +32,7 @@ type GoField struct {
 
 // GoContext holds state during Go code generation including package name
 type GoContext struct {
-	Tracker     *NameTracker
+	Tracker     *internal.NameTracker
 	Structs     []*GoStruct
 	PackageName string
 	NeedsTime   bool // Flag for time.Time import
@@ -40,7 +41,7 @@ type GoContext struct {
 // NewGoContext initializes empty context with package name
 func NewGoContext(packageName string) *GoContext {
 	return &GoContext{
-		Tracker:     NewNameTracker(),
+		Tracker:     internal.NewNameTracker(),
 		Structs:     []*GoStruct{},
 		PackageName: packageName,
 		NeedsTime:   false,
@@ -48,7 +49,7 @@ func NewGoContext(packageName string) *GoContext {
 }
 
 // BuildGoStructs processes schemas marked as Go-only, build GoStruct for each
-func BuildGoStructs(entries []*parser.SchemaEntry, goTypes map[string]bool, graph *DependencyGraph, ctx *GoContext) error {
+func BuildGoStructs(entries []*parser.SchemaEntry, goTypes map[string]bool, graph *internal.DependencyGraph, ctx *GoContext) error {
 	// Build Go structs for all types marked as Go-only
 	for _, entry := range entries {
 		// Skip if not a Go type
@@ -68,7 +69,7 @@ func BuildGoStructs(entries []*parser.SchemaEntry, goTypes map[string]bool, grap
 }
 
 // buildGoStruct builds Go struct - if oneOf present, create union wrapper; otherwise regular struct
-func buildGoStruct(name string, proxy *base.SchemaProxy, graph *DependencyGraph, ctx *GoContext) (*GoStruct, error) {
+func buildGoStruct(name string, proxy *base.SchemaProxy, graph *internal.DependencyGraph, ctx *GoContext) (*GoStruct, error) {
 	schema := proxy.Schema()
 	if schema == nil {
 		return nil, fmt.Errorf("schema for '%s' is nil", name)
@@ -86,11 +87,11 @@ func buildGoStruct(name string, proxy *base.SchemaProxy, graph *DependencyGraph,
 		goStruct.IsUnion = true
 		goStruct.Discriminator = schema.Discriminator.PropertyName
 
-		variants := ExtractVariantNames(schema.OneOf)
+		variants := internal.ExtractVariantNames(schema.OneOf)
 		goStruct.UnionVariants = variants
 
 		// Build discriminator map with validation
-		discriminatorMap, err := buildDiscriminatorMap(schema, variants, graph.schemas)
+		discriminatorMap, err := buildDiscriminatorMap(schema, variants, graph.Schemas())
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +129,7 @@ func buildGoStruct(name string, proxy *base.SchemaProxy, graph *DependencyGraph,
 		}
 
 		// Convert property name to Go field name (PascalCase)
-		fieldName := ToPascalCase(propName)
+		fieldName := internal.ToPascalCase(propName)
 
 		goStruct.Fields = append(goStruct.Fields, &GoField{
 			Name:        fieldName,
@@ -151,7 +152,7 @@ func buildDiscriminatorMap(schema *base.Schema, variants []string, schemas map[s
 	if schema.Discriminator != nil && !schema.Discriminator.Mapping.IsZero() {
 		for value, ref := range schema.Discriminator.Mapping.FromOldest() {
 			// Extract "Dog" from "#/components/schemas/Dog"
-			typeName, err := ExtractReferenceName(ref)
+			typeName, err := internal.ExtractReferenceName(ref)
 			if err != nil {
 				return nil, fmt.Errorf("failed to extract type name from discriminator mapping value '%s': %w", value, err)
 			}
@@ -236,7 +237,7 @@ func goType(schema *base.Schema, propertyName string, propProxy *base.SchemaProx
 	// Check if it's a reference first
 	if propProxy.IsReference() {
 		ref := propProxy.GetReference()
-		typeName, err := ExtractReferenceName(ref)
+		typeName, err := internal.ExtractReferenceName(ref)
 		if err != nil {
 			return "", false, fmt.Errorf("property '%s': %w", propertyName, err)
 		}
@@ -245,7 +246,7 @@ func goType(schema *base.Schema, propertyName string, propProxy *base.SchemaProx
 	}
 
 	// Check if it's an array
-	if len(schema.Type) > 0 && Contains(schema.Type, "array") {
+	if len(schema.Type) > 0 && internal.Contains(schema.Type, "array") {
 		arrayType, err := mapGoArrayType(schema, propProxy, ctx)
 		if err != nil {
 			return "", false, err
@@ -254,9 +255,9 @@ func goType(schema *base.Schema, propertyName string, propProxy *base.SchemaProx
 	}
 
 	// Check if it's an inline object
-	if len(schema.Type) > 0 && Contains(schema.Type, "object") {
+	if len(schema.Type) > 0 && internal.Contains(schema.Type, "object") {
 		// For inline objects, derive type name from property name
-		typeName := ToPascalCase(propertyName)
+		typeName := internal.ToPascalCase(propertyName)
 		return "*" + typeName, false, nil
 	}
 

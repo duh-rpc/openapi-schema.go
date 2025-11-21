@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/duh-rpc/openapi-schema.go/internal"
+	"github.com/duh-rpc/openapi-schema.go/internal/golang"
 	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 	"github.com/duh-rpc/openapi-schema.go/internal/proto"
 )
@@ -203,12 +204,12 @@ func Convert(openapi []byte, opts ConvertOptions) (*ConvertResult, error) {
 	// Generate Go for Go-only types
 	var goBytes []byte
 	if len(goTypes) > 0 {
-		goCtx := internal.NewGoContext(internal.ExtractPackageName(opts.GoPackagePath))
-		err := internal.BuildGoStructs(schemas, goTypes, graph, goCtx)
+		goCtx := golang.NewGoContext(golang.ExtractPackageName(opts.GoPackagePath))
+		err := golang.BuildGoStructs(schemas, goTypes, graph, goCtx)
 		if err != nil {
 			return nil, err
 		}
-		goBytes, err = internal.GenerateGo(goCtx)
+		goBytes, err = golang.GenerateGo(goCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -287,13 +288,13 @@ func ConvertToStruct(openapi []byte, opts ConvertOptions) (*StructResult, error)
 	}
 
 	// Generate Go structs for all schemas
-	goCtx := internal.NewGoContext(internal.ExtractPackageName(opts.GoPackagePath))
-	err = internal.BuildGoStructs(schemas, goTypes, graph, goCtx)
+	goCtx := golang.NewGoContext(golang.ExtractPackageName(opts.GoPackagePath))
+	err = golang.BuildGoStructs(schemas, goTypes, graph, goCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	goBytes, err := internal.GenerateGo(goCtx)
+	goBytes, err := golang.GenerateGo(goCtx)
 	if err != nil {
 		return nil, err
 	}

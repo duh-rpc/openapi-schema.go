@@ -1,10 +1,12 @@
-package internal
+package golang
 
 import (
 	"bytes"
 	"fmt"
 	"strings"
 	"text/template"
+
+	"github.com/duh-rpc/openapi-schema.go/internal"
 )
 
 // GenerateGo produces Go source code from GoStruct IR with custom JSON marshaling
@@ -142,7 +144,7 @@ func renderUnionUnmarshal(s *GoStruct) string {
 	result.WriteString(fmt.Sprintf("func (u *%s) UnmarshalJSON(data []byte) error {\n", s.Name))
 
 	// Create anonymous struct to read discriminator
-	discriminatorFieldName := ToPascalCase(s.Discriminator)
+	discriminatorFieldName := internal.ToPascalCase(s.Discriminator)
 	result.WriteString("\tvar discriminator struct {\n")
 	result.WriteString(fmt.Sprintf("\t\t%s string `json:\"%s\"`\n", discriminatorFieldName, s.Discriminator))
 	result.WriteString("\t}\n")
