@@ -7,6 +7,7 @@ import (
 
 	"github.com/duh-rpc/openapi-schema.go/internal"
 	"github.com/duh-rpc/openapi-schema.go/internal/parser"
+	"github.com/duh-rpc/openapi-schema.go/internal/proto"
 )
 
 // ConvertResult contains the outputs from converting OpenAPI to proto3 and Go code.
@@ -169,8 +170,8 @@ func Convert(openapi []byte, opts ConvertOptions) (*ConvertResult, error) {
 		return nil, err
 	}
 
-	ctx := internal.NewContext()
-	graph, err := internal.BuildMessages(schemas, ctx)
+	ctx := proto.NewContext()
+	graph, err := proto.BuildMessages(schemas, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -187,13 +188,13 @@ func Convert(openapi []byte, opts ConvertOptions) (*ConvertResult, error) {
 	if len(protoTypes) > 0 || len(goTypes) == 0 {
 		protoMessages := filterProtoMessages(ctx.Messages, protoTypes)
 		// Create new context with filtered messages
-		protoCtx := internal.NewContext()
+		protoCtx := proto.NewContext()
 		protoCtx.Messages = protoMessages
 		protoCtx.Enums = ctx.Enums
 		protoCtx.Definitions = filterProtoDefinitions(ctx.Definitions, protoTypes)
 		protoCtx.UsesTimestamp = ctx.UsesTimestamp
 
-		protoBytes, err = internal.Generate(opts.PackageName, opts.PackagePath, protoCtx)
+		protoBytes, err = proto.Generate(opts.PackageName, opts.PackagePath, protoCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -270,8 +271,8 @@ func ConvertToStruct(openapi []byte, opts ConvertOptions) (*StructResult, error)
 	}
 
 	// Build dependency graph for schema validation and discriminator support
-	ctx := internal.NewContext()
-	graph, err := internal.BuildMessages(schemas, ctx)
+	ctx := proto.NewContext()
+	graph, err := proto.BuildMessages(schemas, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -348,8 +349,8 @@ func buildStructTypeMap(schemas []*parser.SchemaEntry, reasons map[string]string
 }
 
 // filterProtoMessages removes messages marked as Go-only from proto output
-func filterProtoMessages(messages []*internal.ProtoMessage, protoTypes map[string]bool) []*internal.ProtoMessage {
-	filtered := make([]*internal.ProtoMessage, 0, len(protoTypes))
+func filterProtoMessages(messages []*proto.ProtoMessage, protoTypes map[string]bool) []*proto.ProtoMessage {
+	filtered := make([]*proto.ProtoMessage, 0, len(protoTypes))
 
 	for _, msg := range messages {
 		// Only include messages that are in protoTypes set (using original schema name)
@@ -367,7 +368,7 @@ func filterProtoDefinitions(definitions []interface{}, protoTypes map[string]boo
 
 	for _, def := range definitions {
 		// Check if it's a ProtoMessage and filter accordingly
-		if msg, ok := def.(*internal.ProtoMessage); ok {
+		if msg, ok := def.(*proto.ProtoMessage); ok {
 			if protoTypes[msg.OriginalSchema] {
 				filtered = append(filtered, def)
 			}

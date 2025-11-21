@@ -94,7 +94,7 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 
 	if proxy.IsReference() {
 		ref := proxy.GetReference()
-		refName, err := extractReferenceName(ref)
+		refName, err := ExtractReferenceName(ref)
 		if err != nil {
 			return nil, err
 		}
@@ -107,15 +107,15 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 		return generateExample(refName, entry.Proxy, ctx)
 	}
 
-	if len(schema.Type) > 0 && contains(schema.Type, "array") {
+	if len(schema.Type) > 0 && Contains(schema.Type, "array") {
 		return generateArrayExample(schema, name, ctx)
 	}
 
-	if len(schema.Type) > 0 && contains(schema.Type, "object") {
+	if len(schema.Type) > 0 && Contains(schema.Type, "object") {
 		return generateObjectExample(schema, name, ctx)
 	}
 
-	if isEnumSchema(schema) {
+	if IsEnumSchema(schema) {
 		if len(schema.Enum) > 0 {
 			return extractYAMLNodeValue(schema.Enum[0]), nil
 		}
@@ -407,7 +407,7 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 
 	if propProxy.IsReference() {
 		ref := propProxy.GetReference()
-		refName, err := extractReferenceName(ref)
+		refName, err := ExtractReferenceName(ref)
 		if err != nil {
 			return nil, err
 		}
@@ -426,11 +426,11 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 		return generateExample(refName, entry.Proxy, ctx)
 	}
 
-	if len(schema.Type) > 0 && contains(schema.Type, "array") {
+	if len(schema.Type) > 0 && Contains(schema.Type, "array") {
 		return generateArrayExample(schema, propertyName, ctx)
 	}
 
-	if len(schema.Type) > 0 && contains(schema.Type, "object") {
+	if len(schema.Type) > 0 && Contains(schema.Type, "object") {
 		obj, err := generateObjectExample(schema, propertyName, ctx)
 		if err != nil {
 			return nil, err
@@ -441,7 +441,7 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 		return obj, nil
 	}
 
-	if isEnumSchema(schema) {
+	if IsEnumSchema(schema) {
 		if len(schema.Enum) > 0 {
 			return extractYAMLNodeValue(schema.Enum[0]), nil
 		}

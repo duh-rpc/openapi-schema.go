@@ -1,9 +1,10 @@
-package internal
+package proto
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/duh-rpc/openapi-schema.go/internal"
 	"github.com/pb33f/libopenapi/datamodel/high/base"
 )
 
@@ -38,7 +39,7 @@ func ProtoType(schema *base.Schema, propertyName string, propProxy *base.SchemaP
 		}
 
 		// Extract the schema name from the reference
-		typeName, err := extractReferenceName(ref)
+		typeName, err := internal.ExtractReferenceName(ref)
 		if err != nil {
 			return "", false, nil, fmt.Errorf("property '%s': %w", propertyName, err)
 		}
@@ -46,7 +47,7 @@ func ProtoType(schema *base.Schema, propertyName string, propProxy *base.SchemaP
 	}
 
 	// Check if it's an array first
-	if len(schema.Type) > 0 && contains(schema.Type, "array") {
+	if len(schema.Type) > 0 && internal.Contains(schema.Type, "array") {
 		itemType, enumValues, err := ResolveArrayItemType(schema, propertyName, propProxy, ctx, parentMsg)
 		if err != nil {
 			return "", false, nil, err
@@ -55,7 +56,7 @@ func ProtoType(schema *base.Schema, propertyName string, propProxy *base.SchemaP
 	}
 
 	// Check if it's an inline object
-	if len(schema.Type) > 0 && contains(schema.Type, "object") {
+	if len(schema.Type) > 0 && internal.Contains(schema.Type, "object") {
 		// Build nested message
 		nestedMsg, err := buildNestedMessage(propertyName, propProxy, ctx, parentMsg)
 		if err != nil {
@@ -65,14 +66,14 @@ func ProtoType(schema *base.Schema, propertyName string, propProxy *base.SchemaP
 	}
 
 	// Check if it's an enum
-	if isEnumSchema(schema) {
+	if internal.IsEnumSchema(schema) {
 		// Check if it's a string enum
 		if isStringEnum(schema) {
 			enumValues := extractEnumValues(schema)
 			return "string", false, enumValues, nil
 		}
 		// Integer enum - hoist to top-level
-		enumName := ToPascalCase(propertyName)
+		enumName := internal.ToPascalCase(propertyName)
 		_, err := buildEnum(enumName, propProxy, ctx)
 		if err != nil {
 			return "", false, nil, err
@@ -159,7 +160,7 @@ func ResolveArrayItemType(schema *base.Schema, propertyName string, propProxy *b
 	}
 
 	// Check for nested arrays
-	if len(itemsSchema.Type) > 0 && contains(itemsSchema.Type, "array") {
+	if len(itemsSchema.Type) > 0 && internal.Contains(itemsSchema.Type, "array") {
 		return "", nil, fmt.Errorf("nested arrays not supported")
 	}
 
@@ -182,7 +183,7 @@ func ResolveArrayItemType(schema *base.Schema, propertyName string, propProxy *b
 	}
 
 	// Check if it's an inline enum
-	if isEnumSchema(itemsSchema) {
+	if internal.IsEnumSchema(itemsSchema) {
 		// Check if it's a string enum
 		if isStringEnum(itemsSchema) {
 			enumValues := extractEnumValues(itemsSchema)
@@ -197,7 +198,7 @@ func ResolveArrayItemType(schema *base.Schema, propertyName string, propProxy *b
 		}
 
 		// Hoist inline integer enum to top-level
-		enumName := ToPascalCase(propertyName)
+		enumName := internal.ToPascalCase(propertyName)
 		_, err := buildEnum(enumName, itemsProxy, ctx)
 		if err != nil {
 			return "", nil, err
@@ -206,7 +207,7 @@ func ResolveArrayItemType(schema *base.Schema, propertyName string, propProxy *b
 	}
 
 	// Check if it's an inline object
-	if len(itemsSchema.Type) > 0 && contains(itemsSchema.Type, "object") {
+	if len(itemsSchema.Type) > 0 && internal.Contains(itemsSchema.Type, "object") {
 		// Validate property name is not plural
 		if strings.HasSuffix(propertyName, "es") {
 			return "", nil, fmt.Errorf("cannot derive message name from plural array property '%s'; use singular form or $ref", propertyName)
@@ -232,27 +233,6 @@ func ResolveArrayItemType(schema *base.Schema, propertyName string, propProxy *b
 	format := itemsSchema.Format
 	scalarType, err := MapScalarType(ctx, itemType, format)
 	return scalarType, nil, err
-}
-
-// extractReferenceName extracts the schema name from a reference string.
-// Example: "#/components/schemas/Address" → "Address"
-func extractReferenceName(ref string) (string, error) {
-	if ref == "" {
-		return "", fmt.Errorf("reference string is empty")
-	}
-
-	// Split by '/' and validate standard format: "#/components/schemas/Name"
-	parts := strings.Split(ref, "/")
-	if len(parts) < 4 || parts[0] != "#" || parts[1] != "components" || parts[2] != "schemas" {
-		return "", fmt.Errorf("invalid reference format: %s (expected #/components/schemas/Name)", ref)
-	}
-
-	name := parts[len(parts)-1]
-	if name == "" {
-		return "", fmt.Errorf("reference has empty name segment: %s", ref)
-	}
-
-	return name, nil
 }
 
 // validateSchema checks for unsupported OpenAPI features

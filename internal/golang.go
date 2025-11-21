@@ -86,7 +86,7 @@ func buildGoStruct(name string, proxy *base.SchemaProxy, graph *DependencyGraph,
 		goStruct.IsUnion = true
 		goStruct.Discriminator = schema.Discriminator.PropertyName
 
-		variants := extractVariantNames(schema.OneOf)
+		variants := ExtractVariantNames(schema.OneOf)
 		goStruct.UnionVariants = variants
 
 		// Build discriminator map with validation
@@ -151,7 +151,7 @@ func buildDiscriminatorMap(schema *base.Schema, variants []string, schemas map[s
 	if schema.Discriminator != nil && !schema.Discriminator.Mapping.IsZero() {
 		for value, ref := range schema.Discriminator.Mapping.FromOldest() {
 			// Extract "Dog" from "#/components/schemas/Dog"
-			typeName, err := extractReferenceName(ref)
+			typeName, err := ExtractReferenceName(ref)
 			if err != nil {
 				return nil, fmt.Errorf("failed to extract type name from discriminator mapping value '%s': %w", value, err)
 			}
@@ -236,7 +236,7 @@ func goType(schema *base.Schema, propertyName string, propProxy *base.SchemaProx
 	// Check if it's a reference first
 	if propProxy.IsReference() {
 		ref := propProxy.GetReference()
-		typeName, err := extractReferenceName(ref)
+		typeName, err := ExtractReferenceName(ref)
 		if err != nil {
 			return "", false, fmt.Errorf("property '%s': %w", propertyName, err)
 		}
@@ -245,7 +245,7 @@ func goType(schema *base.Schema, propertyName string, propProxy *base.SchemaProx
 	}
 
 	// Check if it's an array
-	if len(schema.Type) > 0 && contains(schema.Type, "array") {
+	if len(schema.Type) > 0 && Contains(schema.Type, "array") {
 		arrayType, err := mapGoArrayType(schema, propProxy, ctx)
 		if err != nil {
 			return "", false, err
@@ -254,7 +254,7 @@ func goType(schema *base.Schema, propertyName string, propProxy *base.SchemaProx
 	}
 
 	// Check if it's an inline object
-	if len(schema.Type) > 0 && contains(schema.Type, "object") {
+	if len(schema.Type) > 0 && Contains(schema.Type, "object") {
 		// For inline objects, derive type name from property name
 		typeName := ToPascalCase(propertyName)
 		return "*" + typeName, false, nil

@@ -1,17 +1,18 @@
-package internal
+package proto
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/duh-rpc/openapi-schema.go/internal"
 	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 	"github.com/pb33f/libopenapi/datamodel/high/base"
 )
 
 // Context holds state during conversion
 type Context struct {
-	Tracker       *NameTracker
+	Tracker       *internal.NameTracker
 	Messages      []*ProtoMessage
 	Enums         []*ProtoEnum
 	Definitions   []interface{} // Mixed enums and messages in processing order
@@ -21,7 +22,7 @@ type Context struct {
 // NewContext creates a new conversion context
 func NewContext() *Context {
 	return &Context{
-		Tracker:       NewNameTracker(),
+		Tracker:       internal.NewNameTracker(),
 		Messages:      []*ProtoMessage{},
 		Enums:         []*ProtoEnum{},
 		Definitions:   []interface{}{},
@@ -63,8 +64,8 @@ type ProtoEnumValue struct {
 }
 
 // BuildMessages processes all schemas and returns messages and dependency graph
-func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*DependencyGraph, error) {
-	graph := NewDependencyGraph()
+func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*internal.DependencyGraph, error) {
+	graph := internal.NewDependencyGraph()
 
 	// First pass: Add all schemas to graph and detect unions
 	for _, entry := range entries {
@@ -84,7 +85,7 @@ func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*DependencyGrap
 
 		// Detect oneOf and mark as union
 		if len(schema.OneOf) > 0 {
-			variants := extractVariantNames(schema.OneOf)
+			variants := internal.ExtractVariantNames(schema.OneOf)
 			graph.MarkUnion(entry.Name, "contains oneOf", variants)
 		}
 	}
@@ -102,7 +103,7 @@ func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*DependencyGrap
 		}
 
 		// Check if it's an enum schema
-		if isEnumSchema(schema) {
+		if internal.IsEnumSchema(schema) {
 			// Validate enum schema first
 			if err := validateEnumSchema(schema, entry.Name); err != nil {
 				return nil, err
@@ -129,18 +130,18 @@ func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*DependencyGrap
 }
 
 // buildMessage creates a protoMessage from an OpenAPI schema
-func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *DependencyGraph) (*ProtoMessage, error) {
+func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *internal.DependencyGraph) (*ProtoMessage, error) {
 	schema := proxy.Schema()
 	if schema == nil {
 		if err := proxy.GetBuildError(); err != nil {
-			return nil, SchemaError(name, fmt.Sprintf("failed to resolve schema: %v", err))
+			return nil, internal.SchemaError(name, fmt.Sprintf("failed to resolve schema: %v", err))
 		}
-		return nil, SchemaError(name, "schema is nil")
+		return nil, internal.SchemaError(name, "schema is nil")
 	}
 
 	// Check if it's an object type
-	if len(schema.Type) == 0 || !contains(schema.Type, "object") {
-		return nil, SchemaError(name, "only objects and enums supported at top level")
+	if len(schema.Type) == 0 || !internal.Contains(schema.Type, "object") {
+		return nil, internal.SchemaError(name, "only objects and enums supported at top level")
 	}
 
 	// Validate field numbers before processing
@@ -149,14 +150,14 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *Dep
 	}
 
 	msg := &ProtoMessage{
-		Name:           ctx.Tracker.UniqueName(ToPascalCase(name)),
+		Name:           ctx.Tracker.UniqueName(internal.ToPascalCase(name)),
 		Description:    schema.Description,
 		Fields:         []*ProtoField{},
 		Nested:         []*ProtoMessage{},
 		OriginalSchema: name,
 	}
 
-	fieldTracker := NewNameTracker()
+	fieldTracker := internal.NewNameTracker()
 
 	// Process properties in YAML order
 	if schema.Properties != nil {
@@ -164,7 +165,7 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *Dep
 		for propName, propProxy := range schema.Properties.FromOldest() {
 			propSchema := propProxy.Schema()
 			if propSchema == nil {
-				return nil, PropertyError(name, propName, "has nil schema")
+				return nil, internal.PropertyError(name, propName, "has nil schema")
 			}
 
 			// Track dependency if property references another schema
@@ -180,7 +181,7 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *Dep
 			}
 
 			// Track dependencies in array items
-			if len(propSchema.Type) > 0 && contains(propSchema.Type, "array") {
+			if len(propSchema.Type) > 0 && internal.Contains(propSchema.Type, "array") {
 				if propSchema.Items != nil && propSchema.Items.A != nil {
 					itemProxy := propSchema.Items.A
 					if itemProxy.IsReference() {
@@ -196,9 +197,9 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *Dep
 				}
 			}
 
-			sanitizedName, err := SanitizeFieldName(propName)
+			sanitizedName, err := internal.SanitizeFieldName(propName)
 			if err != nil {
-				return nil, PropertyError(name, propName, err.Error())
+				return nil, internal.PropertyError(name, propName, err.Error())
 			}
 			protoFieldName := fieldTracker.UniqueName(sanitizedName)
 			protoType, repeated, enumValues, err := ProtoType(propSchema, propName, propProxy, ctx, msg)
@@ -207,13 +208,13 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *Dep
 				if strings.Contains(err.Error(), fmt.Sprintf("property '%s'", propName)) {
 					return nil, fmt.Errorf("schema '%s': %w", name, err)
 				}
-				return nil, PropertyError(name, propName, err.Error())
+				return nil, internal.PropertyError(name, propName, err.Error())
 			}
 
 			// For inline objects and integer enums, description goes to the nested type, not the field
 			// For string enums, keep description on field (not hoisted)
 			fieldDescription := propSchema.Description
-			if len(propSchema.Type) > 0 && contains(propSchema.Type, "object") {
+			if len(propSchema.Type) > 0 && internal.Contains(propSchema.Type, "object") {
 				fieldDescription = ""
 			}
 			if isIntegerEnum(propSchema) {
@@ -251,27 +252,12 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *Dep
 	return msg, nil
 }
 
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if strings.EqualFold(s, item) {
-			return true
-		}
-	}
-	return false
-}
-
-// isEnumSchema returns true if schema defines an enum
-func isEnumSchema(schema *base.Schema) bool {
-	return len(schema.Enum) > 0
-}
-
 // isStringEnum returns true if schema is a string enum
 func isStringEnum(schema *base.Schema) bool {
 	if schema == nil || len(schema.Enum) == 0 {
 		return false
 	}
-	return len(schema.Type) > 0 && contains(schema.Type, "string")
+	return len(schema.Type) > 0 && internal.Contains(schema.Type, "string")
 }
 
 // isIntegerEnum returns true if schema is an integer enum
@@ -279,7 +265,7 @@ func isIntegerEnum(schema *base.Schema) bool {
 	if schema == nil || len(schema.Enum) == 0 {
 		return false
 	}
-	return len(schema.Type) > 0 && contains(schema.Type, "integer")
+	return len(schema.Type) > 0 && internal.Contains(schema.Type, "integer")
 }
 
 // extractEnumValues extracts enum values as strings from schema
@@ -385,7 +371,7 @@ func validateFieldNumbers(schema *base.Schema, schemaName string) error {
 
 	// Enforce all-or-nothing: if any field has x-proto-number, all must have it
 	if annotatedCount > 0 && annotatedCount < totalProps {
-		return SchemaError(schemaName, fmt.Sprintf("x-proto-number must be specified on all fields or none (found on %d of %d fields)", annotatedCount, totalProps))
+		return internal.SchemaError(schemaName, fmt.Sprintf("x-proto-number must be specified on all fields or none (found on %d of %d fields)", annotatedCount, totalProps))
 	}
 
 	// Track seen field numbers to detect duplicates
@@ -396,7 +382,7 @@ func validateFieldNumbers(schema *base.Schema, schemaName string) error {
 		// Extract field number
 		fieldNum, found, err := extractFieldNumber(propProxy)
 		if err != nil {
-			return PropertyError(schemaName, propName, err.Error())
+			return internal.PropertyError(schemaName, propName, err.Error())
 		}
 
 		// Skip properties without x-proto-number (all fields have none if we reach here)
@@ -406,21 +392,21 @@ func validateFieldNumbers(schema *base.Schema, schemaName string) error {
 
 		// Validate field number constraints
 		if fieldNum < 1 {
-			return PropertyError(schemaName, propName, "x-proto-number must be between 1 and 536870911")
+			return internal.PropertyError(schemaName, propName, "x-proto-number must be between 1 and 536870911")
 		}
 
 		if fieldNum > 536870911 {
-			return PropertyError(schemaName, propName, "x-proto-number must be between 1 and 536870911")
+			return internal.PropertyError(schemaName, propName, "x-proto-number must be between 1 and 536870911")
 		}
 
 		// Check reserved range (19000-19999)
 		if fieldNum >= 19000 && fieldNum <= 19999 {
-			return PropertyError(schemaName, propName, fmt.Sprintf("x-proto-number %d is in reserved range 19000-19999", fieldNum))
+			return internal.PropertyError(schemaName, propName, fmt.Sprintf("x-proto-number %d is in reserved range 19000-19999", fieldNum))
 		}
 
 		// Check for duplicates
 		if existingProp, exists := seen[fieldNum]; exists {
-			return SchemaError(schemaName, fmt.Sprintf("duplicate x-proto-number %d used by properties '%s' and '%s'", fieldNum, existingProp, propName))
+			return internal.SchemaError(schemaName, fmt.Sprintf("duplicate x-proto-number %d used by properties '%s' and '%s'", fieldNum, existingProp, propName))
 		}
 
 		seen[fieldNum] = propName
@@ -434,12 +420,12 @@ func buildEnum(name string, proxy *base.SchemaProxy, ctx *Context) (*ProtoEnum, 
 	schema := proxy.Schema()
 	if schema == nil {
 		if err := proxy.GetBuildError(); err != nil {
-			return nil, SchemaError(name, fmt.Sprintf("failed to resolve schema: %v", err))
+			return nil, internal.SchemaError(name, fmt.Sprintf("failed to resolve schema: %v", err))
 		}
-		return nil, SchemaError(name, "schema is nil")
+		return nil, internal.SchemaError(name, "schema is nil")
 	}
 
-	enumName := ctx.Tracker.UniqueName(ToPascalCase(name))
+	enumName := ctx.Tracker.UniqueName(internal.ToPascalCase(name))
 
 	enum := &ProtoEnum{
 		Name:        enumName,
@@ -448,7 +434,7 @@ func buildEnum(name string, proxy *base.SchemaProxy, ctx *Context) (*ProtoEnum, 
 	}
 
 	// Add UNSPECIFIED value at 0
-	unspecifiedName := fmt.Sprintf("%s_UNSPECIFIED", strings.ToUpper(ToSnakeCase(enumName)))
+	unspecifiedName := fmt.Sprintf("%s_UNSPECIFIED", strings.ToUpper(internal.ToSnakeCase(enumName)))
 	enum.Values = append(enum.Values, &ProtoEnumValue{
 		Name:   unspecifiedName,
 		Number: 0,
@@ -462,7 +448,7 @@ func buildEnum(name string, proxy *base.SchemaProxy, ctx *Context) (*ProtoEnum, 
 		if value != nil {
 			strValue = value.Value
 		}
-		valueName := ToEnumValueName(enumName, strValue)
+		valueName := internal.ToEnumValueName(enumName, strValue)
 		enum.Values = append(enum.Values, &ProtoEnumValue{
 			Name:   valueName,
 			Number: i + 1,
@@ -494,7 +480,7 @@ func buildNestedMessage(propertyName string, proxy *base.SchemaProxy, ctx *Conte
 	}
 
 	// Derive nested message name via PascalCase
-	msgName := ToPascalCase(propertyName)
+	msgName := internal.ToPascalCase(propertyName)
 	msgName = ctx.Tracker.UniqueName(msgName)
 
 	// Validate field numbers before processing
@@ -510,7 +496,7 @@ func buildNestedMessage(propertyName string, proxy *base.SchemaProxy, ctx *Conte
 		OriginalSchema: propertyName, // For nested messages, use property name
 	}
 
-	fieldTracker := NewNameTracker()
+	fieldTracker := internal.NewNameTracker()
 
 	// Process properties in YAML order
 	if schema.Properties != nil {
@@ -521,7 +507,7 @@ func buildNestedMessage(propertyName string, proxy *base.SchemaProxy, ctx *Conte
 				return nil, fmt.Errorf("property '%s': has nil schema", propName)
 			}
 
-			sanitizedName, err := SanitizeFieldName(propName)
+			sanitizedName, err := internal.SanitizeFieldName(propName)
 			if err != nil {
 				return nil, fmt.Errorf("property '%s': %w", propName, err)
 			}
@@ -538,7 +524,7 @@ func buildNestedMessage(propertyName string, proxy *base.SchemaProxy, ctx *Conte
 			// For inline objects and integer enums, description goes to the nested type, not the field
 			// For string enums, keep description on field (not hoisted)
 			fieldDescription := propSchema.Description
-			if len(propSchema.Type) > 0 && contains(propSchema.Type, "object") {
+			if len(propSchema.Type) > 0 && internal.Contains(propSchema.Type, "object") {
 				fieldDescription = ""
 			}
 			if isIntegerEnum(propSchema) {
@@ -587,11 +573,11 @@ func validateTopLevelSchema(schema *base.Schema, schemaName string) error {
 
 	// Check for schema composition features
 	if len(schema.AllOf) > 0 {
-		return UnsupportedSchemaError(schemaName, "allOf")
+		return internal.UnsupportedSchemaError(schemaName, "allOf")
 	}
 
 	if len(schema.AnyOf) > 0 {
-		return UnsupportedSchemaError(schemaName, "anyOf")
+		return internal.UnsupportedSchemaError(schemaName, "anyOf")
 	}
 
 	if len(schema.OneOf) > 0 {
@@ -617,7 +603,7 @@ func validateTopLevelSchema(schema *base.Schema, schemaName string) error {
 	}
 
 	if schema.Not != nil {
-		return UnsupportedSchemaError(schemaName, "not")
+		return internal.UnsupportedSchemaError(schemaName, "not")
 	}
 
 	return nil

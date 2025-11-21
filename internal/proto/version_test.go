@@ -1,4 +1,4 @@
-package internal_test
+package proto_test
 
 import (
 	"testing"

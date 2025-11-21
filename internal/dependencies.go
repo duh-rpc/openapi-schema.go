@@ -119,14 +119,14 @@ func (g *DependencyGraph) ComputeTransitiveClosure() (goTypes, protoTypes map[st
 	return goTypes, protoTypes, reasons
 }
 
-// extractVariantNames extracts schema names from oneOf variant references
-func extractVariantNames(oneOf []*base.SchemaProxy) []string {
+// ExtractVariantNames extracts schema names from oneOf variant references
+func ExtractVariantNames(oneOf []*base.SchemaProxy) []string {
 	variants := make([]string, 0, len(oneOf))
 	for _, variant := range oneOf {
 		if variant.IsReference() {
 			ref := variant.GetReference()
-			// Use extractReferenceName for proper validation
-			name, err := extractReferenceName(ref)
+			// Use ExtractReferenceName for proper validation
+			name, err := ExtractReferenceName(ref)
 			if err == nil && name != "" {
 				variants = append(variants, name)
 			}
