@@ -23,7 +23,7 @@ A paragraph describing what this change intends to acheive
 
 ### Functional Testing Example
 ```go
-import conv "github.com/duh-rpc/openapi-proto.go"
+import schema "github.com/duh-rpc/openapi-schema.go"
 
 func TestScenarioName(t *testing.T) {
   for _, test := range []struct {
@@ -43,7 +43,7 @@ func TestScenarioName(t *testing.T) {
     },
   } {
     t.Run(test.name, func(t *testing.T) {
-      result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+      result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
         PackageName: "testpkg",
         PackagePath: "github.com/example/proto/v1",
       })

@@ -20,7 +20,7 @@ import (
     "encoding/json"
     "fmt"
 
-    conv "github.com/duh-rpc/openapi-proto.go"
+    schema "github.com/duh-rpc/openapi-schema.go"
 )
 
 func main() {
@@ -46,7 +46,7 @@ components:
           maximum: 120
 `)
 
-    result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
         IncludeAll: true,
         MaxDepth:   5,
         Seed:       12345,
@@ -88,7 +88,7 @@ type ExampleOptions struct {
 Use `IncludeAll: true` to generate examples for all schemas in the OpenAPI document:
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
 })
 ```
@@ -96,7 +96,7 @@ result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
 Or specify specific schemas with `SchemaNames`:
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     SchemaNames: []string{"User", "Product", "Order"},
 })
 ```
@@ -108,7 +108,7 @@ result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
 Controls maximum nesting depth to prevent infinite recursion with circular references:
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     MaxDepth:   3, // Limit to 3 levels of nesting
 })
@@ -122,13 +122,13 @@ Controls random number generation for deterministic output:
 
 ```go
 // Deterministic generation (same seed = same output)
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     Seed:       12345,
 })
 
 // Random generation (different output each time)
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     Seed:       0, // 0 = use time-based seed
 })
@@ -455,7 +455,7 @@ Field overrides allow you to specify exact values for specific field names acros
 ### Basic Usage
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     FieldOverrides: map[string]interface{}{
         "code":    500,
         "status":  "error",
@@ -510,7 +510,7 @@ components:
 
 **Code:**
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     FieldOverrides: map[string]interface{}{
         "code":    400,
         "message": "Validation failed",
@@ -591,7 +591,7 @@ properties:
 If an override value doesn't match the schema type, an error is returned:
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     FieldOverrides: map[string]interface{}{
         "code": "not a number",  // Type mismatch
     },
@@ -909,7 +909,7 @@ components:
           maximum: 50  # min > max
 `)
 
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
 })
 // err: "invalid schema: minimum > maximum"
@@ -918,7 +918,7 @@ result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
 ### Missing Options
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: false,
     SchemaNames: []string{}, // Empty and IncludeAll is false
 })
@@ -939,7 +939,7 @@ components:
           # Missing 'items' specification
 `)
 
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
 })
 // err: "array schema missing items"
@@ -986,7 +986,7 @@ The example generator has the following limitations:
 Generated examples can be injected into OpenAPI documentation tools:
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     Seed:       12345,
 })
@@ -1003,7 +1003,7 @@ for schemaName, exampleJSON := range result.Examples {
 Use examples as test fixtures:
 
 ```go
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     SchemaNames: []string{"User", "Product"},
     Seed:        99999, // Deterministic for tests
 })
@@ -1024,7 +1024,7 @@ Generate mock API responses:
 
 ```go
 http.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
-    result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    result, _ := schema.ConvertToExamples(openapi, schema.ExampleOptions{
         SchemaNames: []string{"User"},
         Seed:        time.Now().UnixNano(), // Different each time
     })

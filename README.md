@@ -1,20 +1,20 @@
-# OpenAPI to Protobuf Converter
+# OpenAPI Schema Processor
 
-A Go library that converts OpenAPI 3.x (3.0, 3.1, 3.2) schema definitions to Protocol Buffer 3 (proto3) format.
+A Go library for processing OpenAPI 3.x (3.0, 3.1, 3.2) schema definitions. Supports conversion to Protocol Buffer 3 (proto3), Go structs, JSON example generation, and schema validation.
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/duh-rpc/openapi-proto.go)](https://golang.org/dl/)
-[![CI Status](https://github.com/duh-rpc/openapi-proto.go/workflows/CI/badge.svg)](https://github.com/duh-rpc/openapi-proto.go/actions)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/duh-rpc/openapi-schema.go)](https://golang.org/dl/)
+[![CI Status](https://github.com/duh-rpc/openapi-schema.go/workflows/CI/badge.svg)](https://github.com/duh-rpc/openapi-schema.go/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Go Report Card](https://goreportcard.com/badge/github.com/duh-rpc/openapi-proto.go)](https://goreportcard.com/report/github.com/duh-rpc/openapi-proto.go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/duh-rpc/openapi-schema.go)](https://goreportcard.com/report/github.com/duh-rpc/openapi-schema.go)
 
 ## Overview
 
-This library parses OpenAPI 3.x specifications (3.0, 3.1, and 3.2) and generates corresponding `.proto` files with proper type mappings, JSON field name annotations, and protobuf conventions. It's designed for projects that need to support both OpenAPI and protobuf interfaces.
+This library parses OpenAPI 3.x specifications (3.0, 3.1, and 3.2) and provides multiple processing capabilities: generating `.proto` files, Go struct types, JSON examples, and validating example data against schemas. It's designed for projects that need to work with OpenAPI schemas in various ways.
 
 ## Installation
 
 ```bash
-go get github.com/duh-rpc/openapi-proto.go
+go get github.com/duh-rpc/openapi-schema.go
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ import (
     "fmt"
     "os"
 
-    conv "github.com/duh-rpc/openapi-proto.go"
+    schema "github.com/duh-rpc/openapi-schema.go"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
     }
 
     // Convert to proto3 and Go
-    result, err := conv.Convert(openapi, conv.ConvertOptions{
+    result, err := schema.Convert(openapi, schema.ConvertOptions{
         PackageName: "myapi",
         PackagePath: "github.com/example/proto/v1",
     })
@@ -76,7 +76,7 @@ import (
     "fmt"
     "os"
 
-    conv "github.com/duh-rpc/openapi-proto.go"
+    schema "github.com/duh-rpc/openapi-schema.go"
 )
 
 func main() {
@@ -87,7 +87,7 @@ func main() {
     }
 
     // Convert ALL schemas to Go structs (no protobuf)
-    result, err := conv.ConvertToStruct(openapi, conv.ConvertOptions{
+    result, err := schema.ConvertToStruct(openapi, schema.ConvertOptions{
         GoPackagePath: "github.com/example/types/v1",
     })
     if err != nil {
@@ -135,7 +135,7 @@ import (
     "fmt"
     "os"
 
-    conv "github.com/duh-rpc/openapi-proto.go"
+    schema "github.com/duh-rpc/openapi-schema.go"
 )
 
 func main() {
@@ -164,7 +164,7 @@ components:
 `)
 
     // Generate examples for all schemas
-    result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+    result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
         IncludeAll: true,
         MaxDepth:   5,
         Seed:       12345, // For deterministic generation
@@ -232,7 +232,7 @@ components:
           type: boolean
 `)
 
-result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, _ := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     Seed:       42,
 })
@@ -255,7 +255,7 @@ components:
           type: string
 `)
 
-result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, _ := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
 })
 // error: "An error occurred"
@@ -276,7 +276,7 @@ components:
           type: number
 `)
 
-result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, _ := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     Seed:       42,
 })
@@ -301,7 +301,7 @@ components:
           type: string
 `)
 
-result, _ := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, _ := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     FieldOverrides: map[string]interface{}{
         "code":    500,
         "message": "Internal server error",
@@ -336,7 +336,7 @@ components:
             $ref: '#/components/schemas/User'
 `)
 
-result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
     IncludeAll: true,
     MaxDepth:   3, // Limit nesting depth
 })
@@ -501,7 +501,7 @@ type Cat struct {
 When schemas contain unions, `Convert()` returns a `ConvertResult` with separate proto and Go outputs. Similarly, `ConvertToStruct()` returns a `StructResult` with Go-only output:
 
 ```go
-result, err := conv.Convert(openapi, conv.ConvertOptions{
+result, err := schema.Convert(openapi, schema.ConvertOptions{
     PackageName:   "myapi",
     PackagePath:   "github.com/example/proto/v1",
     GoPackagePath: "github.com/example/types/v1",  // Optional, defaults to PackagePath

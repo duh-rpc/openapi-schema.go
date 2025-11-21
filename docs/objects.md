@@ -1,6 +1,6 @@
 # Nested Objects
 
-This document explains how `openapi-proto` handles nested object structures in OpenAPI schemas and converts them to Protocol Buffer nested messages.
+This document explains how `openapi-schema` handles nested object structures in OpenAPI schemas and converts them to Protocol Buffer nested messages.
 
 ## Overview
 

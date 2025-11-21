@@ -1,3 +1,7 @@
+> **Historical Note**: This plan was created when the library was named `openapi-proto.go`.
+> The library has since been renamed to `openapi-schema.go`. Import paths and package
+> names in this document reflect the old naming for historical accuracy.
+
 # Go Struct-Only Conversion Implementation Plan
 
 ## Overview
