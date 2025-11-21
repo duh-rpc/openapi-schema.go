@@ -1,10 +1,10 @@
-package conv_test
+package schema_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +29,7 @@ components:
           type: number
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"Response"},
 		Seed:        42,
 	})
@@ -81,7 +81,7 @@ components:
           format: date-time
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		FieldOverrides: map[string]interface{}{
 			"code": 500,
 		},
@@ -146,7 +146,7 @@ components:
           $ref: '#/components/schemas/PageInfo'
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"PaginatedResponse"},
 		Seed:        42,
 	})
@@ -216,7 +216,7 @@ components:
           $ref: '#/components/schemas/Address'
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		FieldOverrides: map[string]interface{}{
 			"code": 42,
 		},
@@ -263,7 +263,7 @@ components:
           type: number
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"Data"},
 		Seed:        42,
 	})
@@ -326,7 +326,7 @@ components:
           default: "Default error"
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		FieldOverrides: map[string]interface{}{
 			"cursor": "custom-cursor-value",
 		},

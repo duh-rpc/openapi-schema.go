@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/duh-rpc/openapi-proto.go/internal/parser"
+	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 	"github.com/pb33f/libopenapi/datamodel/high/base"
 )
 

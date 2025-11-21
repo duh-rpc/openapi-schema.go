@@ -3,7 +3,7 @@ package internal_test
 import (
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -97,7 +97,7 @@ message Response {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -145,7 +145,7 @@ message MixedNaming {
 }
 
 `
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -270,7 +270,7 @@ message Test {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -323,7 +323,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			_, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -422,7 +422,7 @@ message Test {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -522,7 +522,7 @@ message Test {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -622,7 +622,7 @@ message Test {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})

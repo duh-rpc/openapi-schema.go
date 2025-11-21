@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,7 +93,7 @@ components:
           minItems: 1
 `)
 
-	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		IncludeAll: true,
 		MaxDepth:   5,
 		Seed:       12345,
@@ -265,7 +265,7 @@ components:
           type: boolean
 `)
 
-	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		IncludeAll: true,
 		MaxDepth:   5,
 		Seed:       67890,
@@ -374,7 +374,7 @@ components:
           $ref: '#/components/schemas/Node'
 `)
 
-	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		IncludeAll: true,
 		MaxDepth:   3,
 		Seed:       11111,
@@ -468,7 +468,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		IncludeAll: true,
 		MaxDepth:   3,
 		Seed:       22222,
@@ -493,7 +493,7 @@ components:
 		}
 	}
 
-	resultShallow, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	resultShallow, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		IncludeAll: true,
 		MaxDepth:   1,
 		Seed:       22222,
@@ -553,7 +553,7 @@ components:
           format: uuid
 `)
 
-	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		SchemaNames: []string{"StrictTypes"},
 		MaxDepth:    5,
 		Seed:        33333,
@@ -663,7 +663,7 @@ components:
           default: 0
 `)
 
-	result, err := conv.ConvertToExamples(openapi, conv.ExampleOptions{
+	result, err := schema.ConvertToExamples(openapi, schema.ExampleOptions{
 		IncludeAll: true,
 		MaxDepth:   5,
 		Seed:       42,

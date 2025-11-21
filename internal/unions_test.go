@@ -3,7 +3,7 @@ package internal_test
 import (
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +46,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -76,12 +76,12 @@ components:
 	require.NotNil(t, result.TypeMap)
 	petInfo, exists := result.TypeMap["Pet"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 
 	for _, variant := range []string{"Dog", "Cat", "Bird"} {
 		info, exists := result.TypeMap[variant]
 		require.True(t, exists, "variant %s should exist", variant)
-		assert.Equal(t, conv.TypeLocationGolang, info.Location, "variant %s should be Go-only", variant)
+		assert.Equal(t, schema.TypeLocationGolang, info.Location, "variant %s should be Go-only", variant)
 	}
 }
 
@@ -122,7 +122,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -146,7 +146,7 @@ components:
 	require.NotNil(t, result.TypeMap)
 	ownerInfo, exists := result.TypeMap["Owner"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, ownerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, ownerInfo.Location)
 	assert.Contains(t, ownerInfo.Reason, "references union type")
 }
 
@@ -189,7 +189,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -213,7 +213,7 @@ components:
 	require.NotNil(t, result.TypeMap)
 	containerInfo, exists := result.TypeMap["Container"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, containerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, containerInfo.Location)
 	assert.Contains(t, containerInfo.Reason, "references union type")
 }
 
@@ -245,7 +245,7 @@ components:
           type: string
 `
 
-	_, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	_, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -286,7 +286,7 @@ components:
           type: string
 `
 
-	_, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	_, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -343,7 +343,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -370,23 +370,23 @@ components:
 	require.NotNil(t, result.TypeMap)
 	paymentInfo, exists := result.TypeMap["Payment"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, paymentInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, paymentInfo.Location)
 
 	for _, variant := range []string{"CreditCard", "BankTransfer"} {
 		info, exists := result.TypeMap[variant]
 		require.True(t, exists, "variant %s should exist", variant)
-		assert.Equal(t, conv.TypeLocationGolang, info.Location, "variant %s should be Go-only", variant)
+		assert.Equal(t, schema.TypeLocationGolang, info.Location, "variant %s should be Go-only", variant)
 	}
 
 	// Address and Bank should be Proto-only since they don't reference unions
 	// They will be in the proto output, not Go output
 	addressInfo, exists := result.TypeMap["Address"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationProto, addressInfo.Location)
+	assert.Equal(t, schema.TypeLocationProto, addressInfo.Location)
 
 	bankInfo, exists := result.TypeMap["Bank"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationProto, bankInfo.Location)
+	assert.Equal(t, schema.TypeLocationProto, bankInfo.Location)
 
 	// Verify nested objects are in proto output, not Go
 	protoCode := string(result.Protobuf)
@@ -457,7 +457,7 @@ components:
           type: integer
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -496,22 +496,22 @@ components:
 	require.NotNil(t, result.TypeMap)
 	orderInfo, exists := result.TypeMap["Order"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, orderInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, orderInfo.Location)
 	assert.Contains(t, orderInfo.Reason, "references union type")
 
 	// Verify both unions are Go-only
 	paymentInfo, exists := result.TypeMap["Payment"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, paymentInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, paymentInfo.Location)
 
 	shippingInfo, exists := result.TypeMap["Shipping"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, shippingInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, shippingInfo.Location)
 
 	// Verify all variants are Go-only
 	for _, variant := range []string{"CreditCard", "Cash", "Express", "Standard"} {
 		info, exists := result.TypeMap[variant]
 		require.True(t, exists, "variant %s should exist", variant)
-		assert.Equal(t, conv.TypeLocationGolang, info.Location, "variant %s should be Go-only", variant)
+		assert.Equal(t, schema.TypeLocationGolang, info.Location, "variant %s should be Go-only", variant)
 	}
 }

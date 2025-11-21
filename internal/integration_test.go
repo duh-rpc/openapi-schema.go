@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -71,7 +71,7 @@ components:
           format: date-time
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/ecommerce",
 		PackageName:   "ecommerce",
 		PackagePath:   "github.com/example/proto/v1",
@@ -93,12 +93,12 @@ components:
 
 	paymentInfo := result.TypeMap["PaymentMethod"]
 	require.NotNil(t, paymentInfo)
-	assert.Equal(t, conv.TypeLocationGolang, paymentInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, paymentInfo.Location)
 	assert.Equal(t, "contains oneOf", paymentInfo.Reason)
 
 	orderInfo := result.TypeMap["Order"]
 	require.NotNil(t, orderInfo)
-	assert.Equal(t, conv.TypeLocationGolang, orderInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, orderInfo.Location)
 	assert.True(t, strings.Contains(orderInfo.Reason, "references union type"))
 
 	tmpDir := t.TempDir()
@@ -343,7 +343,7 @@ components:
           $ref: '#/components/schemas/Type25'
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		PackageName: "largepkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -431,7 +431,7 @@ components:
             type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/notifications",
 		PackageName:   "notifications",
 		PackagePath:   "github.com/example/proto/v1",
@@ -453,12 +453,12 @@ components:
 
 	notificationInfo := result.TypeMap["Notification"]
 	require.NotNil(t, notificationInfo)
-	assert.Equal(t, conv.TypeLocationGolang, notificationInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, notificationInfo.Location)
 	assert.Equal(t, "contains oneOf", notificationInfo.Reason)
 
 	campaignInfo := result.TypeMap["Campaign"]
 	require.NotNil(t, campaignInfo)
-	assert.Equal(t, conv.TypeLocationGolang, campaignInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, campaignInfo.Location)
 	assert.True(t, strings.Contains(campaignInfo.Reason, "references union type"))
 
 	tmpDir := t.TempDir()
@@ -611,7 +611,7 @@ components:
             $ref: '#/components/schemas/DeploymentPlan'
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/config",
 		PackageName:   "config",
 		PackagePath:   "github.com/example/proto/v1",
@@ -640,25 +640,25 @@ components:
 
 	storageType := result.TypeMap["Storage"]
 	require.NotNil(t, storageType)
-	assert.Equal(t, conv.TypeLocationGolang, storageType.Location)
+	assert.Equal(t, schema.TypeLocationGolang, storageType.Location)
 
 	authType := result.TypeMap["Authentication"]
 	require.NotNil(t, authType)
-	assert.Equal(t, conv.TypeLocationGolang, authType.Location)
+	assert.Equal(t, schema.TypeLocationGolang, authType.Location)
 
 	serviceConfigType := result.TypeMap["ServiceConfig"]
 	require.NotNil(t, serviceConfigType)
-	assert.Equal(t, conv.TypeLocationGolang, serviceConfigType.Location)
+	assert.Equal(t, schema.TypeLocationGolang, serviceConfigType.Location)
 	assert.True(t, strings.Contains(serviceConfigType.Reason, "references union type"))
 
 	deploymentType := result.TypeMap["DeploymentPlan"]
 	require.NotNil(t, deploymentType)
-	assert.Equal(t, conv.TypeLocationGolang, deploymentType.Location)
+	assert.Equal(t, schema.TypeLocationGolang, deploymentType.Location)
 	assert.True(t, strings.Contains(deploymentType.Reason, "references union type"))
 
 	orgType := result.TypeMap["Organization"]
 	require.NotNil(t, orgType)
-	assert.Equal(t, conv.TypeLocationGolang, orgType.Location)
+	assert.Equal(t, schema.TypeLocationGolang, orgType.Location)
 	assert.True(t, strings.Contains(orgType.Reason, "references union type"))
 
 	tmpDir := t.TempDir()

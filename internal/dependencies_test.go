@@ -3,7 +3,7 @@ package internal_test
 import (
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,7 +52,7 @@ components:
           $ref: '#/components/schemas/Pet'
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -64,29 +64,29 @@ components:
 	// Pet is union
 	petInfo, exists := result.TypeMap["Pet"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Contains(t, petInfo.Reason, "oneOf")
 
 	// Dog and Cat are variants
 	dogInfo, exists := result.TypeMap["Dog"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 	assert.Contains(t, dogInfo.Reason, "variant")
 
 	catInfo, exists := result.TypeMap["Cat"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 	assert.Contains(t, catInfo.Reason, "variant")
 
 	// Both Owner and Home reference Pet (diamond pattern)
 	ownerInfo, exists := result.TypeMap["Owner"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, ownerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, ownerInfo.Location)
 	assert.Contains(t, ownerInfo.Reason, "references union type")
 
 	homeInfo, exists := result.TypeMap["Home"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, homeInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, homeInfo.Location)
 	assert.Contains(t, homeInfo.Reason, "references union type")
 
 	// Verify all types are in Go output
@@ -156,7 +156,7 @@ components:
           $ref: '#/components/schemas/B'
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -169,7 +169,7 @@ components:
 	for _, typeName := range []string{"Union", "Variant1", "Variant2", "D", "C", "B", "A"} {
 		info, exists := result.TypeMap[typeName]
 		require.True(t, exists, "type %s not in TypeMap", typeName)
-		assert.Equal(t, conv.TypeLocationGolang, info.Location, "type %s should be Go-only", typeName)
+		assert.Equal(t, schema.TypeLocationGolang, info.Location, "type %s should be Go-only", typeName)
 		assert.NotEmpty(t, info.Reason, "type %s should have a reason", typeName)
 	}
 
@@ -249,7 +249,7 @@ components:
           $ref: '#/components/schemas/Union2'
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -261,26 +261,26 @@ components:
 	// Both unions should be Go-only
 	union1Info, exists := result.TypeMap["Union1"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, union1Info.Location)
+	assert.Equal(t, schema.TypeLocationGolang, union1Info.Location)
 
 	union2Info, exists := result.TypeMap["Union2"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, union2Info.Location)
+	assert.Equal(t, schema.TypeLocationGolang, union2Info.Location)
 
 	// Container references both unions
 	containerInfo, exists := result.TypeMap["Container"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, containerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, containerInfo.Location)
 	assert.Contains(t, containerInfo.Reason, "references union type")
 
 	// Variants should be Go-only
 	dogInfo, exists := result.TypeMap["Dog"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 
 	catInfo, exists := result.TypeMap["Cat"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 }
 
 // TestDependencyGraphOrphanedTypes validates types with no dependencies stay proto-only
@@ -332,7 +332,7 @@ components:
           type: boolean
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -344,21 +344,21 @@ components:
 	// Union and related types are Go-only
 	unionInfo, exists := result.TypeMap["Union"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, unionInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, unionInfo.Location)
 
 	ownerInfo, exists := result.TypeMap["Owner"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, ownerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, ownerInfo.Location)
 
 	// Orphaned types should be proto-only
 	orphan1Info, exists := result.TypeMap["Orphan1"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationProto, orphan1Info.Location)
+	assert.Equal(t, schema.TypeLocationProto, orphan1Info.Location)
 	assert.Empty(t, orphan1Info.Reason)
 
 	orphan2Info, exists := result.TypeMap["Orphan2"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationProto, orphan2Info.Location)
+	assert.Equal(t, schema.TypeLocationProto, orphan2Info.Location)
 	assert.Empty(t, orphan2Info.Reason)
 
 	// Verify orphaned types are in proto output, not Go
@@ -415,7 +415,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -427,27 +427,27 @@ components:
 	// Pet and variants are Go-only
 	petInfo, exists := result.TypeMap["Pet"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 
 	dogInfo, exists := result.TypeMap["Dog"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 
 	catInfo, exists := result.TypeMap["Cat"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 
 	// Toy is referenced by Dog (a variant), but Dog doesn't reference a union
 	// So Toy should be proto-only (not all variants referencing something makes it Go)
 	toyInfo, exists := result.TypeMap["Toy"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationProto, toyInfo.Location)
+	assert.Equal(t, schema.TypeLocationProto, toyInfo.Location)
 	assert.Empty(t, toyInfo.Reason)
 
 	// Food is orphaned and should also be proto-only
 	foodInfo, exists := result.TypeMap["Food"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationProto, foodInfo.Location)
+	assert.Equal(t, schema.TypeLocationProto, foodInfo.Location)
 	assert.Empty(t, foodInfo.Reason)
 
 	// Verify proto output includes both Toy and Food

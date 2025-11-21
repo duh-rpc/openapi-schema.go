@@ -1,10 +1,10 @@
-package conv_test
+package schema_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,13 +13,13 @@ func TestConvertToExamplesValidation(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		openapi []byte
-		opts    conv.ExampleOptions
+		opts    schema.ExampleOptions
 		wantErr string
 	}{
 		{
 			name:    "empty openapi bytes",
 			openapi: []byte{},
-			opts:    conv.ExampleOptions{IncludeAll: true},
+			opts:    schema.ExampleOptions{IncludeAll: true},
 			wantErr: "openapi input cannot be empty",
 		},
 		{
@@ -30,18 +30,18 @@ info:
   version: 1.0.0
 paths: {}
 `),
-			opts:    conv.ExampleOptions{},
+			opts:    schema.ExampleOptions{},
 			wantErr: "must specify SchemaNames or set IncludeAll",
 		},
 		{
 			name:    "invalid openapi document",
 			openapi: []byte(`this is not valid: [yaml`),
-			opts:    conv.ExampleOptions{IncludeAll: true},
+			opts:    schema.ExampleOptions{IncludeAll: true},
 			wantErr: "failed to parse OpenAPI document",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := conv.ConvertToExamples(test.openapi, test.opts)
+			_, err := schema.ConvertToExamples(test.openapi, test.opts)
 			require.ErrorContains(t, err, test.wantErr)
 		})
 	}
@@ -141,7 +141,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -261,7 +261,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -296,7 +296,7 @@ components:
             - completed
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"Status"},
 		Seed:        42,
 	})
@@ -336,13 +336,13 @@ components:
 
 	const seed = int64(12345)
 
-	result1, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result1, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"Product"},
 		Seed:        seed,
 	})
 	require.NoError(t, err)
 
-	result2, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result2, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"Product"},
 		Seed:        seed,
 	})
@@ -375,7 +375,7 @@ components:
           type: integer
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		IncludeAll: true,
 		Seed:       42,
 	})
@@ -412,7 +412,7 @@ components:
           type: integer
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"User", "Product"},
 		Seed:        42,
 	})
@@ -439,7 +439,7 @@ components:
           type: string
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"User"},
 		Seed:        42,
 	})
@@ -532,7 +532,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -643,7 +643,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -699,7 +699,7 @@ components:
                               type: string
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"Level1"},
 		MaxDepth:    3,
 		Seed:        42,
@@ -782,7 +782,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -859,7 +859,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -898,7 +898,7 @@ components:
                 type: integer
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames: []string{"UserList"},
 		Seed:        42,
 	})
@@ -964,7 +964,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			_, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{"BadArray", "InvalidArray"},
 				Seed:        42,
 			})
@@ -1061,7 +1061,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -1189,7 +1189,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -1222,7 +1222,7 @@ components:
           type: string
 `
 
-	result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 		SchemaNames:    []string{"ErrorResponse"},
 		Seed:           42,
 		FieldOverrides: map[string]interface{}{"code": 400},
@@ -1325,7 +1325,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -1387,7 +1387,7 @@ components:
         ` + test.fieldName + `:
           type: string
 `
-			result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 				SchemaNames: []string{"Pagination"},
 				Seed:        42,
 			})
@@ -1464,7 +1464,7 @@ components:
         ` + test.fieldName + `:
           type: string
 `
-			result, err := conv.ConvertToExamples([]byte(openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
 				SchemaNames: []string{"Response"},
 				Seed:        42,
 			})
@@ -1593,7 +1593,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				FieldOverrides: test.overrides,
 				IncludeAll:     true,
 				Seed:           42,
@@ -1694,7 +1694,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			_, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				FieldOverrides: test.overrides,
 				IncludeAll:     true,
 				Seed:           42,

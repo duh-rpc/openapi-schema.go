@@ -1,9 +1,9 @@
-package conv_test
+package schema_test
 
 import (
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +28,7 @@ components:
         age: 30
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -62,7 +62,7 @@ components:
         age: "thirty"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -77,7 +77,7 @@ components:
 
 	hasError := false
 	for _, issue := range userResult.Issues {
-		if issue.Severity == conv.IssueSeverityError {
+		if issue.Severity == schema.IssueSeverityError {
 			hasError = true
 			assert.Equal(t, "example", issue.ExampleField)
 		}
@@ -100,7 +100,7 @@ components:
           type: string
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -131,7 +131,7 @@ components:
         - name: "Bob"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -168,7 +168,7 @@ components:
           age: 25
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -195,7 +195,7 @@ components:
       example: "deleted"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -224,7 +224,7 @@ components:
       example: 150
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -255,7 +255,7 @@ components:
         name: "John"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -269,7 +269,7 @@ components:
 
 	hasWarning := false
 	for _, issue := range userResult.Issues {
-		if issue.Severity == conv.IssueSeverityWarning {
+		if issue.Severity == schema.IssueSeverityWarning {
 			hasWarning = true
 			assert.Contains(t, issue.Message, "OpenAPI 3.0 detected")
 		}
@@ -301,7 +301,7 @@ components:
         title: "Widget"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		SchemaNames: []string{"User"},
 	})
 
@@ -339,7 +339,7 @@ components:
         title: "Widget"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		SchemaNames: []string{"User"},
 		IncludeAll:  true,
 	})
@@ -362,14 +362,14 @@ components:
       type: object
 `
 
-	_, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{})
+	_, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{})
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "must specify SchemaNames or set IncludeAll")
 }
 
 func TestValidateExamplesEmptyInput(t *testing.T) {
-	_, err := conv.ValidateExamples([]byte{}, conv.ValidateOptions{
+	_, err := schema.ValidateExamples([]byte{}, schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -400,7 +400,7 @@ components:
         age: "thirty"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 
@@ -414,7 +414,7 @@ components:
 
 	errorCount := 0
 	for _, issue := range userResult.Issues {
-		if issue.Severity == conv.IssueSeverityError {
+		if issue.Severity == schema.IssueSeverityError {
 			errorCount++
 		}
 	}
@@ -436,7 +436,7 @@ components:
       example: "abc"
 `
 
-	result, err := conv.ValidateExamples([]byte(openapi), conv.ValidateOptions{
+	result, err := schema.ValidateExamples([]byte(openapi), schema.ValidateOptions{
 		IncludeAll: true,
 	})
 

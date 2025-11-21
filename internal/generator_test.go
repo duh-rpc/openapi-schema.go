@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,7 +52,7 @@ components:
         - pending
 `
 
-	result, err := conv.Convert([]byte(openapi), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(openapi), schema.ConvertOptions{
 		PackageName: "testapi",
 		PackagePath: "github.com/example/proto/v1/testapi",
 	})

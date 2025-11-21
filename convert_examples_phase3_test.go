@@ -1,10 +1,10 @@
-package conv_test
+package schema_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -159,7 +159,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
@@ -325,7 +325,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToExamples([]byte(test.openapi), conv.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})

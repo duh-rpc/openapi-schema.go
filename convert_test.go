@@ -1,4 +1,4 @@
-package conv_test
+package schema_test
 
 import (
 	"os"
@@ -6,20 +6,20 @@ import (
 	"path/filepath"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // assertProtoOnlyTypeMap validates that all schemas in TypeMap are proto-only
-func assertProtoOnlyTypeMap(t *testing.T, result *conv.ConvertResult, expectedSchemas []string) {
+func assertProtoOnlyTypeMap(t *testing.T, result *schema.ConvertResult, expectedSchemas []string) {
 	require.NotNil(t, result.TypeMap)
 	assert.Len(t, result.TypeMap, len(expectedSchemas))
 
-	for _, schema := range expectedSchemas {
-		info, exists := result.TypeMap[schema]
-		require.True(t, exists, "schema %s not in TypeMap", schema)
-		assert.Equal(t, conv.TypeLocationProto, info.Location)
+	for _, name := range expectedSchemas {
+		info, exists := result.TypeMap[name]
+		require.True(t, exists, "schema %s not in TypeMap", name)
+		assert.Equal(t, schema.TypeLocationProto, info.Location)
 		assert.Empty(t, info.Reason)
 	}
 }
@@ -28,38 +28,38 @@ func TestConvertBasics(t *testing.T) {
 	for _, test := range []struct {
 		name     string
 		given    []byte
-		opts     conv.ConvertOptions
+		opts     schema.ConvertOptions
 		expected string
 		wantErr  string
 	}{
 		{
 			name:    "empty openapi bytes",
 			given:   []byte{},
-			opts:    conv.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
+			opts:    schema.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
 			wantErr: "openapi input cannot be empty",
 		},
 		{
 			name:    "empty package name",
 			given:   []byte("openapi: 3.0.0"),
-			opts:    conv.ConvertOptions{PackagePath: "github.com/example/proto/v1"},
+			opts:    schema.ConvertOptions{PackagePath: "github.com/example/proto/v1"},
 			wantErr: "package name cannot be empty",
 		},
 		{
 			name:    "empty package path",
 			given:   []byte("openapi: 3.0.0"),
-			opts:    conv.ConvertOptions{PackageName: "testpkg"},
+			opts:    schema.ConvertOptions{PackageName: "testpkg"},
 			wantErr: "package path cannot be empty",
 		},
 		{
 			name:    "both empty",
 			given:   []byte("openapi: 3.0.0"),
-			opts:    conv.ConvertOptions{},
+			opts:    schema.ConvertOptions{},
 			wantErr: "package name cannot be empty",
 		},
 		{
 			name:    "invalid YAML syntax",
 			given:   []byte("this is not valid: [yaml"),
-			opts:    conv.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
+			opts:    schema.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
 			wantErr: "failed to parse OpenAPI document",
 		},
 		{
@@ -71,7 +71,7 @@ info:
 paths: {}
 
 `),
-			opts:     conv.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
+			opts:     schema.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
 			expected: "syntax = \"proto3\";\n\npackage testpkg;\n\noption go_package = \"github.com/example/proto/v1\";\n\n",
 		},
 		{
@@ -83,7 +83,7 @@ info:
 paths: {}
 
 `),
-			opts:    conv.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
+			opts:    schema.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
 			wantErr: "supplied spec is a different version",
 		},
 		{
@@ -96,12 +96,12 @@ paths: {}
   },
   "paths": {}
 }`),
-			opts:     conv.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
+			opts:     schema.ConvertOptions{PackageName: "testpkg", PackagePath: "github.com/example/proto/v1"},
 			expected: "syntax = \"proto3\";\n\npackage testpkg;\n\noption go_package = \"github.com/example/proto/v1\";\n\n",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert(test.given, test.opts)
+			result, err := schema.Convert(test.given, test.opts)
 
 			if test.wantErr != "" {
 				require.ErrorContains(t, err, test.wantErr)
@@ -155,7 +155,7 @@ paths: {}
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -240,7 +240,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -279,7 +279,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -361,7 +361,7 @@ components:
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.Convert([]byte(test.given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
 				PackageName: "testpkg",
 				PackagePath: "github.com/example/proto/v1",
 			})
@@ -416,7 +416,7 @@ message Order {
 
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -575,7 +575,7 @@ message Order {
 
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "ecommerce",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -616,7 +616,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -649,7 +649,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -681,7 +681,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -719,7 +719,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -729,7 +729,7 @@ components:
 
 	info, exists := result.TypeMap["Pet"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, info.Location)
+	assert.Equal(t, schema.TypeLocationGolang, info.Location)
 	assert.Equal(t, "contains oneOf", info.Reason)
 }
 
@@ -763,7 +763,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -773,12 +773,12 @@ components:
 
 	dogInfo, exists := result.TypeMap["Dog"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 	assert.Equal(t, "variant of union type Pet", dogInfo.Reason)
 
 	catInfo, exists := result.TypeMap["Cat"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
 }
 
@@ -819,7 +819,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -829,7 +829,7 @@ components:
 
 	ownerInfo, exists := result.TypeMap["Owner"]
 	require.True(t, exists)
-	assert.Equal(t, conv.TypeLocationGolang, ownerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, ownerInfo.Location)
 	assert.Equal(t, "references union type Pet", ownerInfo.Reason)
 }
 
@@ -873,7 +873,7 @@ components:
           type: integer
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName: "testpkg",
 		PackagePath: "github.com/example/proto/v1",
 	})
@@ -885,7 +885,7 @@ components:
 	for _, name := range []string{"A", "B", "C", "D", "E"} {
 		info, exists := result.TypeMap[name]
 		require.True(t, exists)
-		assert.Equal(t, conv.TypeLocationGolang, info.Location)
+		assert.Equal(t, schema.TypeLocationGolang, info.Location)
 	}
 
 	// Check specific reasons
@@ -926,7 +926,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
 		GoPackagePath: "github.com/example/types/v1",
@@ -970,11 +970,11 @@ components:
 
 	// Verify TypeMap
 	require.NotNil(t, result.TypeMap)
-	assert.Equal(t, conv.TypeLocationGolang, result.TypeMap["Pet"].Location)
+	assert.Equal(t, schema.TypeLocationGolang, result.TypeMap["Pet"].Location)
 	assert.Equal(t, "contains oneOf", result.TypeMap["Pet"].Reason)
-	assert.Equal(t, conv.TypeLocationGolang, result.TypeMap["Dog"].Location)
+	assert.Equal(t, schema.TypeLocationGolang, result.TypeMap["Dog"].Location)
 	assert.Equal(t, "variant of union type Pet", result.TypeMap["Dog"].Reason)
-	assert.Equal(t, conv.TypeLocationGolang, result.TypeMap["Cat"].Location)
+	assert.Equal(t, schema.TypeLocationGolang, result.TypeMap["Cat"].Location)
 	assert.Equal(t, "variant of union type Pet", result.TypeMap["Cat"].Reason)
 }
 
@@ -1011,7 +1011,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
 		GoPackagePath: "github.com/example/types/v1",
@@ -1057,7 +1057,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
 		GoPackagePath: "github.com/example/types/v1",
@@ -1133,7 +1133,7 @@ components:
           type: integer
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
 		GoPackagePath: "github.com/example/types/v1",
@@ -1162,7 +1162,7 @@ components:
 	// All types should be Go-only
 	for _, name := range []string{"Owner", "Pet", "Dog", "Cat", "Vehicle", "Car", "Bike"} {
 		require.NotNil(t, result.TypeMap[name])
-		assert.Equal(t, conv.TypeLocationGolang, result.TypeMap[name].Location)
+		assert.Equal(t, schema.TypeLocationGolang, result.TypeMap[name].Location)
 	}
 }
 
@@ -1195,7 +1195,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
 		GoPackagePath: "github.com/example/types",
@@ -1253,7 +1253,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
 		GoPackagePath: "test/types",
@@ -1363,7 +1363,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
 		GoPackagePath: "github.com/example/types/v1",
@@ -1375,19 +1375,19 @@ components:
 	// Pet should be marked as union
 	petInfo := result.TypeMap["Pet"]
 	require.NotNil(t, petInfo)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Equal(t, "contains oneOf", petInfo.Reason)
 
 	// Dog should be marked as variant
 	dogInfo := result.TypeMap["Dog"]
 	require.NotNil(t, dogInfo)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 	assert.Equal(t, "variant of union type Pet", dogInfo.Reason)
 
 	// Cat should be marked as variant
 	catInfo := result.TypeMap["Cat"]
 	require.NotNil(t, catInfo)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
 }
 
@@ -1395,30 +1395,30 @@ func TestConvertToStructBasics(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		given   []byte
-		opts    conv.ConvertOptions
+		opts    schema.ConvertOptions
 		wantErr string
 	}{
 		{
 			name:    "empty openapi bytes",
 			given:   []byte{},
-			opts:    conv.ConvertOptions{GoPackagePath: "github.com/example/models"},
+			opts:    schema.ConvertOptions{GoPackagePath: "github.com/example/models"},
 			wantErr: "openapi input cannot be empty",
 		},
 		{
 			name:    "empty GoPackagePath",
 			given:   []byte("openapi: 3.0.0"),
-			opts:    conv.ConvertOptions{},
+			opts:    schema.ConvertOptions{},
 			wantErr: "GoPackagePath cannot be empty",
 		},
 		{
 			name:    "invalid YAML syntax",
 			given:   []byte("this is not valid: [yaml"),
-			opts:    conv.ConvertOptions{GoPackagePath: "github.com/example/models"},
+			opts:    schema.ConvertOptions{GoPackagePath: "github.com/example/models"},
 			wantErr: "failed to parse OpenAPI document",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := conv.ConvertToStruct(test.given, test.opts)
+			result, err := schema.ConvertToStruct(test.given, test.opts)
 
 			if test.wantErr != "" {
 				require.ErrorContains(t, err, test.wantErr)
@@ -1451,7 +1451,7 @@ components:
           type: integer
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/models",
 	})
 
@@ -1472,7 +1472,7 @@ components:
 
 	userInfo := result.TypeMap["User"]
 	require.NotNil(t, userInfo)
-	assert.Equal(t, conv.TypeLocationGolang, userInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, userInfo.Location)
 	assert.Empty(t, userInfo.Reason)
 }
 
@@ -1516,7 +1516,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/models/v1",
 	})
 
@@ -1539,22 +1539,22 @@ components:
 
 	petInfo := result.TypeMap["Pet"]
 	require.NotNil(t, petInfo)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Equal(t, "contains oneOf", petInfo.Reason)
 
 	dogInfo := result.TypeMap["Dog"]
 	require.NotNil(t, dogInfo)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 	assert.Equal(t, "variant of union type Pet", dogInfo.Reason)
 
 	catInfo := result.TypeMap["Cat"]
 	require.NotNil(t, catInfo)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
 
 	productInfo := result.TypeMap["Product"]
 	require.NotNil(t, productInfo)
-	assert.Equal(t, conv.TypeLocationGolang, productInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, productInfo.Location)
 	assert.Empty(t, productInfo.Reason)
 }
 
@@ -1591,7 +1591,7 @@ components:
           type: number
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/shapes",
 	})
 
@@ -1661,7 +1661,7 @@ components:
           type: integer
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/models",
 	})
 
@@ -1687,12 +1687,12 @@ components:
 
 	petInfo := result.TypeMap["Pet"]
 	require.NotNil(t, petInfo)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Equal(t, "contains oneOf", petInfo.Reason)
 
 	vehicleInfo := result.TypeMap["Vehicle"]
 	require.NotNil(t, vehicleInfo)
-	assert.Equal(t, conv.TypeLocationGolang, vehicleInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, vehicleInfo.Location)
 	assert.Equal(t, "contains oneOf", vehicleInfo.Reason)
 }
 
@@ -1740,7 +1740,7 @@ components:
           type: number
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/mixed",
 	})
 
@@ -1763,17 +1763,17 @@ components:
 
 	userInfo := result.TypeMap["User"]
 	require.NotNil(t, userInfo)
-	assert.Equal(t, conv.TypeLocationGolang, userInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, userInfo.Location)
 	assert.Empty(t, userInfo.Reason)
 
 	productInfo := result.TypeMap["Product"]
 	require.NotNil(t, productInfo)
-	assert.Equal(t, conv.TypeLocationGolang, productInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, productInfo.Location)
 	assert.Empty(t, productInfo.Reason)
 
 	petInfo := result.TypeMap["Pet"]
 	require.NotNil(t, petInfo)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Equal(t, "contains oneOf", petInfo.Reason)
 }
 
@@ -1814,7 +1814,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/refs",
 	})
 
@@ -1833,11 +1833,11 @@ components:
 
 	ownerInfo := result.TypeMap["Owner"]
 	require.NotNil(t, ownerInfo)
-	assert.Equal(t, conv.TypeLocationGolang, ownerInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, ownerInfo.Location)
 
 	petInfo := result.TypeMap["Pet"]
 	require.NotNil(t, petInfo)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Equal(t, "contains oneOf", petInfo.Reason)
 }
 
@@ -1880,7 +1880,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/models",
 	})
 
@@ -1945,7 +1945,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "test/models",
 	})
 	require.NoError(t, err)
@@ -2054,7 +2054,7 @@ components:
   schemas: {}
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/empty",
 	})
 
@@ -2108,7 +2108,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/complete",
 	})
 
@@ -2122,7 +2122,7 @@ components:
 	for _, typeName := range expectedTypes {
 		info := result.TypeMap[typeName]
 		require.NotNil(t, info, "TypeMap missing entry for %s", typeName)
-		assert.Equal(t, conv.TypeLocationGolang, info.Location)
+		assert.Equal(t, schema.TypeLocationGolang, info.Location)
 	}
 
 	assert.Empty(t, result.TypeMap["User"].Reason)
@@ -2163,7 +2163,7 @@ components:
           type: string
 `)
 
-	result, err := conv.ConvertToStruct(input, conv.ConvertOptions{
+	result, err := schema.ConvertToStruct(input, schema.ConvertOptions{
 		GoPackagePath: "github.com/example/unions",
 	})
 
@@ -2185,16 +2185,16 @@ components:
 
 	petInfo := result.TypeMap["Pet"]
 	require.NotNil(t, petInfo)
-	assert.Equal(t, conv.TypeLocationGolang, petInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, petInfo.Location)
 	assert.Equal(t, "contains oneOf", petInfo.Reason)
 
 	dogInfo := result.TypeMap["Dog"]
 	require.NotNil(t, dogInfo)
-	assert.Equal(t, conv.TypeLocationGolang, dogInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, dogInfo.Location)
 	assert.Equal(t, "variant of union type Pet", dogInfo.Reason)
 
 	catInfo := result.TypeMap["Cat"]
 	require.NotNil(t, catInfo)
-	assert.Equal(t, conv.TypeLocationGolang, catInfo.Location)
+	assert.Equal(t, schema.TypeLocationGolang, catInfo.Location)
 	assert.Equal(t, "variant of union type Pet", catInfo.Reason)
 }

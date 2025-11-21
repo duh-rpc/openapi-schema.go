@@ -1,12 +1,12 @@
-package conv
+package schema
 
 import (
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/duh-rpc/openapi-proto.go/internal"
-	"github.com/duh-rpc/openapi-proto.go/internal/parser"
+	"github.com/duh-rpc/openapi-schema.go/internal"
+	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 )
 
 // ConvertResult contains the outputs from converting OpenAPI to proto3 and Go code.

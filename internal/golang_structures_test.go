@@ -3,7 +3,7 @@ package internal_test
 import (
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +38,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -108,7 +108,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -173,7 +173,7 @@ components:
           type: string
 `
 
-			result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+			result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 				GoPackagePath: test.packagePath,
 				PackageName:   "testpkg",
 				PackagePath:   "github.com/example/proto/v1",
@@ -222,7 +222,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -276,7 +276,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",
@@ -331,7 +331,7 @@ components:
           type: string
 `
 
-	result, err := conv.Convert([]byte(given), conv.ConvertOptions{
+	result, err := schema.Convert([]byte(given), schema.ConvertOptions{
 		GoPackagePath: "github.com/example/types/v1",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto/v1",

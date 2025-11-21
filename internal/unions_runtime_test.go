@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	conv "github.com/duh-rpc/openapi-proto.go"
+	schema "github.com/duh-rpc/openapi-schema.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +49,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/types",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
@@ -212,7 +212,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/types",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
@@ -347,7 +347,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/types",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
@@ -443,7 +443,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/types",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
@@ -542,7 +542,7 @@ components:
           type: string
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/types",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",
@@ -725,7 +725,7 @@ components:
           type: integer
 `)
 
-	result, err := conv.Convert(openapi, conv.ConvertOptions{
+	result, err := schema.Convert(openapi, schema.ConvertOptions{
 		GoPackagePath: "test/types",
 		PackageName:   "testpkg",
 		PackagePath:   "github.com/example/proto",

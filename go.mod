@@ -1,4 +1,4 @@
-module github.com/duh-rpc/openapi-proto.go
+module github.com/duh-rpc/openapi-schema.go
 
 go 1.24.7
 
