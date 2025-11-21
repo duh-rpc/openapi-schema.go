@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/duh-rpc/openapi-schema.go/internal"
 	"github.com/duh-rpc/openapi-schema.go/internal/example"
 	"github.com/duh-rpc/openapi-schema.go/internal/golang"
 	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 	"github.com/duh-rpc/openapi-schema.go/internal/proto"
+	"github.com/duh-rpc/openapi-schema.go/internal/validate"
 )
 
 // ConvertResult contains the outputs from converting OpenAPI to proto3 and Go code.
@@ -457,7 +457,7 @@ func ValidateExamples(openapi []byte, opts ValidateOptions) (*ValidationResult, 
 		schemaNames = nil
 	}
 
-	internalResult, err := internal.ValidateExamples(openapi, schemaNames)
+	internalResult, err := validate.ValidateExamples(openapi, schemaNames)
 	if err != nil {
 		return nil, err
 	}
