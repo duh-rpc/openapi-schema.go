@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/duh-rpc/openapi-schema.go/internal"
+	"github.com/duh-rpc/openapi-schema.go/internal/example"
 	"github.com/duh-rpc/openapi-schema.go/internal/golang"
 	"github.com/duh-rpc/openapi-schema.go/internal/parser"
 	"github.com/duh-rpc/openapi-schema.go/internal/proto"
@@ -415,7 +416,7 @@ func ConvertToExamples(openapi []byte, opts ExampleOptions) (*ExampleResult, err
 		schemaNames = nil
 	}
 
-	examples, err := internal.GenerateExamples(schemas, schemaNames, opts.MaxDepth, opts.Seed, opts.FieldOverrides)
+	examples, err := example.GenerateExamples(schemas, schemaNames, opts.MaxDepth, opts.Seed, opts.FieldOverrides)
 	if err != nil {
 		return nil, err
 	}
