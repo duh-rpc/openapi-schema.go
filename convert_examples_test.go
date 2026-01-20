@@ -1703,3 +1703,371 @@ components:
 		})
 	}
 }
+
+func TestConvertToExamplesSchemaLevelExample(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "schema with complete example object",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Transfer:
+      type: object
+      example:
+        id: "xfer_complete_example"
+        amount: 100
+        status: "completed"
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        status:
+          type: string
+`,
+			schema: "Transfer",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, "xfer_complete_example", m["id"])
+				assert.Equal(t, float64(100), m["amount"])
+				assert.Equal(t, "completed", m["status"])
+			},
+		},
+		{
+			name: "schema-level example with nested object",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    User:
+      type: object
+      example:
+        name: "John Doe"
+        address:
+          street: "123 Main St"
+          city: "Springfield"
+      properties:
+        name:
+          type: string
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+`,
+			schema: "User",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, "John Doe", m["name"])
+				address := m["address"].(map[string]interface{})
+				assert.Equal(t, "123 Main St", address["street"])
+				assert.Equal(t, "Springfield", address["city"])
+			},
+		},
+		{
+			name: "schema-level example with array",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Order:
+      type: object
+      example:
+        orderId: "ord_123"
+        items:
+          - "item1"
+          - "item2"
+          - "item3"
+      properties:
+        orderId:
+          type: string
+        items:
+          type: array
+          items:
+            type: string
+`,
+			schema: "Order",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, "ord_123", m["orderId"])
+				items := m["items"].([]interface{})
+				assert.Len(t, items, 3)
+				assert.Equal(t, "item1", items[0])
+				assert.Equal(t, "item2", items[1])
+				assert.Equal(t, "item3", items[2])
+			},
+		},
+		{
+			name: "schema-level example takes precedence over property examples",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Product:
+      type: object
+      example:
+        name: "Schema Level Name"
+        price: 999
+      properties:
+        name:
+          type: string
+          example: "Property Level Name"
+        price:
+          type: integer
+          example: 100
+`,
+			schema: "Product",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, "Schema Level Name", m["name"])
+				assert.Equal(t, float64(999), m["price"])
+			},
+		},
+		{
+			name: "schema-level example with null value",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    NullableData:
+      type: object
+      example: null
+      properties:
+        value:
+          type: string
+`,
+			schema: "NullableData",
+			validate: func(t *testing.T, value interface{}) {
+				assert.Nil(t, value)
+			},
+		},
+		{
+			name: "schema-level example with boolean values",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Flags:
+      type: object
+      example:
+        enabled: true
+        disabled: false
+      properties:
+        enabled:
+          type: boolean
+        disabled:
+          type: boolean
+`,
+			schema: "Flags",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, true, m["enabled"])
+				assert.Equal(t, false, m["disabled"])
+			},
+		},
+		{
+			name: "schema-level example with float values",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Measurement:
+      type: object
+      example:
+        temperature: 98.6
+        pressure: 1013.25
+      properties:
+        temperature:
+          type: number
+        pressure:
+          type: number
+`,
+			schema: "Measurement",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, 98.6, m["temperature"])
+				assert.Equal(t, 1013.25, m["pressure"])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
+func TestConvertToExamplesSchemaLevelExamplesArray(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "schema with examples array uses first entry",
+			openapi: `openapi: "3.1.0"
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Payment:
+      type: object
+      examples:
+        - id: "pay_first_example"
+          amount: 50
+        - id: "pay_second_example"
+          amount: 100
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+`,
+			schema: "Payment",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, "pay_first_example", m["id"])
+				assert.Equal(t, float64(50), m["amount"])
+			},
+		},
+		{
+			name: "example singular takes precedence over examples array",
+			openapi: `openapi: "3.1.0"
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Data:
+      type: object
+      example:
+        value: "from singular example"
+      examples:
+        - value: "from examples array"
+      properties:
+        value:
+          type: string
+`,
+			schema: "Data",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				assert.Equal(t, "from singular example", m["value"])
+			},
+		},
+		{
+			name: "empty examples array falls back to generation",
+			openapi: `openapi: "3.1.0"
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Generated:
+      type: object
+      examples: []
+      properties:
+        name:
+          type: string
+`,
+			schema: "Generated",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				assert.IsType(t, "", m["name"])
+			},
+		},
+		{
+			name: "examples array with nested objects",
+			openapi: `openapi: "3.1.0"
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    ComplexData:
+      type: object
+      examples:
+        - user:
+            name: "Alice"
+            age: 30
+          tags:
+            - "premium"
+            - "verified"
+      properties:
+        user:
+          type: object
+          properties:
+            name:
+              type: string
+            age:
+              type: integer
+        tags:
+          type: array
+          items:
+            type: string
+`,
+			schema: "ComplexData",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				user := m["user"].(map[string]interface{})
+				assert.Equal(t, "Alice", user["name"])
+				assert.Equal(t, float64(30), user["age"])
+				tags := m["tags"].([]interface{})
+				assert.Len(t, tags, 2)
+				assert.Equal(t, "premium", tags[0])
+				assert.Equal(t, "verified", tags[1])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
