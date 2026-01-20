@@ -148,6 +148,11 @@ func generateScalarValue(fieldName string, schema *base.Schema, typ, format stri
 		return extractYAMLNodeValue(schema.Example), nil
 	}
 
+	// Check for property-level examples array (OpenAPI 3.1 format)
+	if len(schema.Examples) > 0 && schema.Examples[0] != nil {
+		return extractYAMLNodeValue(schema.Examples[0]), nil
+	}
+
 	if schema.Default != nil {
 		return extractYAMLNodeValue(schema.Default), nil
 	}
@@ -435,6 +440,14 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 		}
 
 		return generateExample(refName, entry.Proxy, ctx)
+	}
+
+	// Check for explicit example on this property (for non-scalar types)
+	if schema.Example != nil {
+		return decodeYAMLNode(schema.Example)
+	}
+	if len(schema.Examples) > 0 && schema.Examples[0] != nil {
+		return decodeYAMLNode(schema.Examples[0])
 	}
 
 	if len(schema.Type) > 0 && internal.Contains(schema.Type, "array") {
