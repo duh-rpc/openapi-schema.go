@@ -93,6 +93,16 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 		return nil, fmt.Errorf("schema %s is nil", name)
 	}
 
+	// Check for schema-level example (highest priority for objects/arrays)
+	if schema.Example != nil {
+		return decodeYAMLNode(schema.Example)
+	}
+
+	// Check for schema-level examples array (OpenAPI 3.1 format)
+	if len(schema.Examples) > 0 && schema.Examples[0] != nil {
+		return decodeYAMLNode(schema.Examples[0])
+	}
+
 	if proxy.IsReference() {
 		ref := proxy.GetReference()
 		refName, err := internal.ExtractReferenceName(ref)
@@ -136,6 +146,11 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 func generateScalarValue(fieldName string, schema *base.Schema, typ, format string, ctx *ExampleContext) (interface{}, error) {
 	if schema.Example != nil {
 		return extractYAMLNodeValue(schema.Example), nil
+	}
+
+	// Check for property-level examples array (OpenAPI 3.1 format)
+	if len(schema.Examples) > 0 && schema.Examples[0] != nil {
+		return extractYAMLNodeValue(schema.Examples[0]), nil
 	}
 
 	if schema.Default != nil {
@@ -427,6 +442,14 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 		return generateExample(refName, entry.Proxy, ctx)
 	}
 
+	// Check for explicit example on this property (for non-scalar types)
+	if schema.Example != nil {
+		return decodeYAMLNode(schema.Example)
+	}
+	if len(schema.Examples) > 0 && schema.Examples[0] != nil {
+		return decodeYAMLNode(schema.Examples[0])
+	}
+
 	if len(schema.Type) > 0 && internal.Contains(schema.Type, "array") {
 		return generateArrayExample(schema, propertyName, ctx)
 	}
@@ -458,7 +481,7 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 	return generateScalarValue(propertyName, schema, typ, format, ctx)
 }
 
-// extractYAMLNodeValue extracts the actual value from a yaml.Node
+// extractYAMLNodeValue extracts the actual value from a yaml.Node (scalars only)
 func extractYAMLNodeValue(node *yaml.Node) interface{} {
 	if node == nil {
 		return nil
@@ -479,11 +502,60 @@ func extractYAMLNodeValue(node *yaml.Node) interface{} {
 			if val, err := strconv.ParseBool(node.Value); err == nil {
 				return val
 			}
+		case "!!null":
+			return nil
 		case "!!str", "":
 			return node.Value
 		}
 		return node.Value
 	default:
 		return node.Value
+	}
+}
+
+// decodeYAMLNode recursively decodes a yaml.Node into a Go value (objects, arrays, scalars)
+func decodeYAMLNode(node *yaml.Node) (interface{}, error) {
+	if node == nil {
+		return nil, nil
+	}
+
+	switch node.Kind {
+	case yaml.MappingNode:
+		result := make(map[string]interface{})
+		for i := 0; i < len(node.Content); i += 2 {
+			keyNode := node.Content[i]
+			valueNode := node.Content[i+1]
+
+			key := keyNode.Value
+			value, err := decodeYAMLNode(valueNode)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = value
+		}
+		return result, nil
+
+	case yaml.SequenceNode:
+		result := make([]interface{}, 0, len(node.Content))
+		for _, item := range node.Content {
+			value, err := decodeYAMLNode(item)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, value)
+		}
+		return result, nil
+
+	case yaml.ScalarNode:
+		return extractYAMLNodeValue(node), nil
+
+	case yaml.DocumentNode:
+		return nil, fmt.Errorf("unsupported yaml node kind: DocumentNode")
+
+	case yaml.AliasNode:
+		return nil, fmt.Errorf("unsupported yaml node kind: AliasNode")
+
+	default:
+		return nil, fmt.Errorf("unsupported yaml node kind: %d", node.Kind)
 	}
 }
