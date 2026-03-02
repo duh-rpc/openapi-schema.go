@@ -57,12 +57,12 @@ func GenerateExamples(entries []*parser.SchemaEntry, schemaNames []string, maxDe
 
 		value, err := generateExample(entry.Name, entry.Proxy, ctx)
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		jsonBytes, err := json.Marshal(value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal example for %s: %w", entry.Name, err)
+			continue
 		}
 
 		result[entry.Name] = json.RawMessage(jsonBytes)

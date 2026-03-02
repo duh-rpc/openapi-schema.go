@@ -922,9 +922,9 @@ components:
 
 func TestConvertToExamplesInvalidArraySchema(t *testing.T) {
 	for _, test := range []struct {
-		name    string
-		openapi string
-		wantErr string
+		name       string
+		openapi    string
+		schemaName string
 	}{
 		{
 			name: "array without items",
@@ -940,7 +940,7 @@ components:
         items:
           type: array
 `,
-			wantErr: "array must have items defined",
+			schemaName: "BadArray",
 		},
 		{
 			name: "array with minItems greater than maxItems",
@@ -960,15 +960,17 @@ components:
           items:
             type: string
 `,
-			wantErr: "invalid schema: minItems > maxItems",
+			schemaName: "InvalidArray",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
-				SchemaNames: []string{"BadArray", "InvalidArray"},
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schemaName},
 				Seed:        42,
 			})
-			require.ErrorContains(t, err, test.wantErr)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Empty(t, result.Examples)
 		})
 	}
 }
@@ -1619,10 +1621,10 @@ components:
 
 func TestConvertToExamplesFieldOverrideTypeMismatch(t *testing.T) {
 	for _, test := range []struct {
-		name      string
-		openapi   string
-		overrides map[string]interface{}
-		wantErr   string
+		name       string
+		openapi    string
+		overrides  map[string]interface{}
+		schemaName string
 	}{
 		{
 			name: "string value for integer field",
@@ -1638,8 +1640,8 @@ components:
         code:
           type: integer
 `,
-			overrides: map[string]interface{}{"code": "not a number"},
-			wantErr:   "field override for 'code' has wrong type",
+			overrides:  map[string]interface{}{"code": "not a number"},
+			schemaName: "Response",
 		},
 		{
 			name: "integer value for string field",
@@ -1655,8 +1657,8 @@ components:
         message:
           type: string
 `,
-			overrides: map[string]interface{}{"message": 123},
-			wantErr:   "field override for 'message' has wrong type",
+			overrides:  map[string]interface{}{"message": 123},
+			schemaName: "Response",
 		},
 		{
 			name: "string value for boolean field",
@@ -1672,8 +1674,8 @@ components:
         enabled:
           type: boolean
 `,
-			overrides: map[string]interface{}{"enabled": "true"},
-			wantErr:   "field override for 'enabled' has wrong type",
+			overrides:  map[string]interface{}{"enabled": "true"},
+			schemaName: "Config",
 		},
 		{
 			name: "float with decimal for integer field",
@@ -1689,17 +1691,19 @@ components:
         count:
           type: integer
 `,
-			overrides: map[string]interface{}{"count": 42.5},
-			wantErr:   "field override for 'count' has wrong type",
+			overrides:  map[string]interface{}{"count": 42.5},
+			schemaName: "Data",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
 				FieldOverrides: test.overrides,
 				IncludeAll:     true,
 				Seed:           42,
 			})
-			require.ErrorContains(t, err, test.wantErr)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.NotContains(t, result.Examples, test.schemaName)
 		})
 	}
 }
@@ -3421,4 +3425,200 @@ components:
 	require.NoError(t, err)
 	require.Contains(t, pet, "purrs")
 	assert.IsType(t, true, pet["purrs"])
+}
+
+func TestConvertToExamplesErrorIsolation(t *testing.T) {
+	t.Run("valid schema alongside erroring schema", func(t *testing.T) {
+		openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    ValidSchema:
+      type: object
+      properties:
+        name:
+          type: string
+    ErrorSchema:
+      type: object
+      properties:
+        items:
+          type: array
+`
+
+		result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+			IncludeAll: true,
+			Seed:       42,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// ErrorSchema is skipped due to array without items
+		assert.NotContains(t, result.Examples, "ErrorSchema")
+
+		// ValidSchema still gets its example
+		require.Contains(t, result.Examples, "ValidSchema")
+		var valid map[string]interface{}
+		err = json.Unmarshal(result.Examples["ValidSchema"], &valid)
+		require.NoError(t, err)
+		require.Contains(t, valid, "name")
+		assert.IsType(t, "", valid["name"])
+	})
+
+	t.Run("all valid schemas produce examples", func(t *testing.T) {
+		openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        name:
+          type: string
+    Product:
+      type: object
+      properties:
+        price:
+          type: number
+`
+
+		result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+			IncludeAll: true,
+			Seed:       42,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Contains(t, result.Examples, "User")
+		assert.Contains(t, result.Examples, "Product")
+	})
+
+	t.Run("all schemas error returns empty map", func(t *testing.T) {
+		openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    BadArray1:
+      type: object
+      properties:
+        items:
+          type: array
+    BadArray2:
+      type: object
+      properties:
+        tags:
+          type: array
+`
+
+		result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+			IncludeAll: true,
+			Seed:       42,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Empty(t, result.Examples)
+	})
+
+	t.Run("oneOf schema alongside simple schema", func(t *testing.T) {
+		openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    SimpleSchema:
+      type: object
+      properties:
+        name:
+          type: string
+    SftpRequest:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+    HttpRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+    DeliveryCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      oneOf:
+        - $ref: '#/components/schemas/SftpRequest'
+        - $ref: '#/components/schemas/HttpRequest'
+`
+
+		result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+			SchemaNames: []string{"SimpleSchema", "DeliveryCreateRequest"},
+			Seed:        42,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// SimpleSchema generates successfully
+		require.Contains(t, result.Examples, "SimpleSchema")
+		var simple map[string]interface{}
+		err = json.Unmarshal(result.Examples["SimpleSchema"], &simple)
+		require.NoError(t, err)
+		require.Contains(t, simple, "name")
+		assert.IsType(t, "", simple["name"])
+
+		// DeliveryCreateRequest also generates with composition support
+		require.Contains(t, result.Examples, "DeliveryCreateRequest")
+		var delivery map[string]interface{}
+		err = json.Unmarshal(result.Examples["DeliveryCreateRequest"], &delivery)
+		require.NoError(t, err)
+		require.Contains(t, delivery, "name")
+		assert.IsType(t, "", delivery["name"])
+		// Merged from first oneOf variant (SftpRequest)
+		require.Contains(t, delivery, "host")
+		assert.IsType(t, "", delivery["host"])
+		require.Contains(t, delivery, "port")
+	})
+
+	t.Run("multiple valid schemas with one erroring schema in between", func(t *testing.T) {
+		openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    First:
+      type: object
+      properties:
+        alpha:
+          type: string
+    Broken:
+      type: object
+      properties:
+        list:
+          type: array
+    Last:
+      type: object
+      properties:
+        omega:
+          type: integer
+`
+
+		result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+			IncludeAll: true,
+			Seed:       42,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		assert.NotContains(t, result.Examples, "Broken")
+		assert.Contains(t, result.Examples, "First")
+		assert.Contains(t, result.Examples, "Last")
+	})
 }

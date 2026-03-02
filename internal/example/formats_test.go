@@ -329,14 +329,14 @@ components:
 				SchemaNames: []string{test.schema},
 				Seed:        42,
 			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
 
 			if test.name == "invalid constraints - minLength greater than maxLength" {
-				require.ErrorContains(t, err, "invalid schema: minLength > maxLength")
+				assert.Empty(t, result.Examples)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
 			var value interface{}
