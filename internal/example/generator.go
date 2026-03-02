@@ -136,7 +136,12 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 		if len(schema.AllOf) > 0 {
 			return generateAllOfExample(schema, name, ctx)
 		}
-		// oneOf and anyOf branches will be added in Phase 2
+		if len(schema.OneOf) > 0 {
+			return generateOneOfExample(schema, name, ctx)
+		}
+		if len(schema.AnyOf) > 0 {
+			return generateAnyOfExample(schema, name, ctx)
+		}
 		return nil, fmt.Errorf("schema must have type or $ref")
 	}
 
@@ -478,6 +483,85 @@ func generateAllOfExample(schema *base.Schema, name string, ctx *ExampleContext)
 	}
 
 	return result, nil
+}
+
+// generateOneOfExample generates an example by picking the first variant from oneOf
+func generateOneOfExample(schema *base.Schema, name string, ctx *ExampleContext) (interface{}, error) {
+	return generateFirstVariantExample(schema.OneOf, schema.Discriminator, name, ctx)
+}
+
+// generateAnyOfExample generates an example by picking the first variant from anyOf
+func generateAnyOfExample(schema *base.Schema, name string, ctx *ExampleContext) (interface{}, error) {
+	return generateFirstVariantExample(schema.AnyOf, schema.Discriminator, name, ctx)
+}
+
+// generateFirstVariantExample picks the first variant and generates its example, applying discriminator if present
+func generateFirstVariantExample(variants []*base.SchemaProxy, discriminator *base.Discriminator, name string, ctx *ExampleContext) (interface{}, error) {
+	if len(variants) == 0 {
+		return nil, fmt.Errorf("no variants available for schema %s", name)
+	}
+
+	variant := variants[0]
+	if variant == nil {
+		return nil, fmt.Errorf("first variant is nil for schema %s", name)
+	}
+
+	var result interface{}
+	var err error
+
+	if variant.IsReference() {
+		ref := variant.GetReference()
+		refName, refErr := internal.ExtractReferenceName(ref)
+		if refErr != nil {
+			return nil, refErr
+		}
+
+		entry, ok := ctx.schemas[refName]
+		if !ok {
+			return nil, fmt.Errorf("schema '%s' not found", refName)
+		}
+
+		result, err = generateExample(refName, entry.Proxy, ctx)
+	} else {
+		entryName := fmt.Sprintf("%s/variant[0]", name)
+		result, err = generateExample(entryName, variant, ctx)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if discriminator != nil && discriminator.PropertyName != "" {
+		if resultMap, ok := result.(map[string]interface{}); ok {
+			discriminatorValue := resolveDiscriminatorValue(variant, discriminator)
+			resultMap[discriminator.PropertyName] = discriminatorValue
+			return resultMap, nil
+		}
+	}
+
+	return result, nil
+}
+
+// resolveDiscriminatorValue determines the discriminator value for a given variant
+func resolveDiscriminatorValue(variant *base.SchemaProxy, discriminator *base.Discriminator) string {
+	if variant.IsReference() {
+		ref := variant.GetReference()
+
+		if discriminator.Mapping != nil {
+			for key, value := range discriminator.Mapping.FromOldest() {
+				if value == ref {
+					return key
+				}
+			}
+		}
+
+		refName, err := internal.ExtractReferenceName(ref)
+		if err == nil {
+			return refName
+		}
+	}
+
+	return ""
 }
 
 // generatePropertyValue generates example value for object property

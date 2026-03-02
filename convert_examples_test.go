@@ -2751,3 +2751,417 @@ components:
 	assert.IsType(t, float64(0), composed["id"])
 	assert.IsType(t, "", composed["extra"])
 }
+
+func TestConvertToExamplesOneOf(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "oneOf with ref variants picks first variant",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Cat:
+      type: object
+      properties:
+        purrs:
+          type: boolean
+    Dog:
+      type: object
+      properties:
+        barks:
+          type: boolean
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+`,
+			schema: "Pet",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "purrs")
+				assert.IsType(t, true, m["purrs"])
+				assert.NotContains(t, m, "barks")
+			},
+		},
+		{
+			name: "oneOf without type field does not error",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Variant:
+      oneOf:
+        - type: object
+          properties:
+            name:
+              type: string
+        - type: object
+          properties:
+            code:
+              type: integer
+`,
+			schema: "Variant",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				assert.IsType(t, "", m["name"])
+				assert.NotContains(t, m, "code")
+			},
+		},
+		{
+			name: "oneOf with inline schemas picks first variant",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    InlineVariant:
+      oneOf:
+        - type: object
+          properties:
+            alpha:
+              type: string
+        - type: object
+          properties:
+            beta:
+              type: integer
+`,
+			schema: "InlineVariant",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "alpha")
+				assert.IsType(t, "", m["alpha"])
+				assert.NotContains(t, m, "beta")
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
+func TestConvertToExamplesOneOfWithDiscriminator(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "discriminator sets property to schema name",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Cat:
+      type: object
+      properties:
+        purrs:
+          type: boolean
+    Dog:
+      type: object
+      properties:
+        barks:
+          type: boolean
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: petType
+`,
+			schema: "Pet",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "purrs")
+				require.Contains(t, m, "petType")
+				assert.Equal(t, "Cat", m["petType"])
+			},
+		},
+		{
+			name: "discriminator with mapping uses mapping key",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    SftpRequest:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+    HttpRequest:
+      type: object
+      properties:
+        url:
+          type: string
+    DeliveryRequest:
+      oneOf:
+        - $ref: '#/components/schemas/SftpRequest'
+        - $ref: '#/components/schemas/HttpRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          sftp: '#/components/schemas/SftpRequest'
+          http: '#/components/schemas/HttpRequest'
+`,
+			schema: "DeliveryRequest",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "host")
+				require.Contains(t, m, "port")
+				require.Contains(t, m, "type")
+				assert.Equal(t, "sftp", m["type"])
+			},
+		},
+		{
+			name: "discriminator without mapping falls back to schema name",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Circle:
+      type: object
+      properties:
+        radius:
+          type: number
+    Square:
+      type: object
+      properties:
+        side:
+          type: number
+    Shape:
+      oneOf:
+        - $ref: '#/components/schemas/Circle'
+        - $ref: '#/components/schemas/Square'
+      discriminator:
+        propertyName: shapeType
+`,
+			schema: "Shape",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "radius")
+				require.Contains(t, m, "shapeType")
+				assert.Equal(t, "Circle", m["shapeType"])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
+func TestConvertToExamplesAnyOf(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "anyOf picks first variant",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    StringOrInt:
+      anyOf:
+        - type: object
+          properties:
+            text:
+              type: string
+        - type: object
+          properties:
+            number:
+              type: integer
+`,
+			schema: "StringOrInt",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "text")
+				assert.IsType(t, "", m["text"])
+				assert.NotContains(t, m, "number")
+			},
+		},
+		{
+			name: "anyOf with ref variants picks first",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Email:
+      type: object
+      properties:
+        address:
+          type: string
+          format: email
+    Phone:
+      type: object
+      properties:
+        number:
+          type: string
+    ContactInfo:
+      anyOf:
+        - $ref: '#/components/schemas/Email'
+        - $ref: '#/components/schemas/Phone'
+`,
+			schema: "ContactInfo",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "address")
+				assert.IsType(t, "", m["address"])
+				assert.NotContains(t, m, "number")
+			},
+		},
+		{
+			name: "anyOf with discriminator sets property correctly",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    AdminUser:
+      type: object
+      properties:
+        permissions:
+          type: string
+    RegularUser:
+      type: object
+      properties:
+        plan:
+          type: string
+    AnyUser:
+      anyOf:
+        - $ref: '#/components/schemas/AdminUser'
+        - $ref: '#/components/schemas/RegularUser'
+      discriminator:
+        propertyName: role
+        mapping:
+          admin: '#/components/schemas/AdminUser'
+          regular: '#/components/schemas/RegularUser'
+`,
+			schema: "AnyUser",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "permissions")
+				require.Contains(t, m, "role")
+				assert.Equal(t, "admin", m["role"])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
+func TestConvertToExamplesOneOfAlongsideSimpleSchemas(t *testing.T) {
+	openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    SimpleSchema:
+      type: object
+      properties:
+        name:
+          type: string
+    Cat:
+      type: object
+      properties:
+        purrs:
+          type: boolean
+    Dog:
+      type: object
+      properties:
+        barks:
+          type: boolean
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+`
+
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+		SchemaNames: []string{"SimpleSchema", "Pet"},
+		Seed:        42,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Contains(t, result.Examples, "SimpleSchema")
+	require.Contains(t, result.Examples, "Pet")
+
+	var simple map[string]interface{}
+	err = json.Unmarshal(result.Examples["SimpleSchema"], &simple)
+	require.NoError(t, err)
+	require.Contains(t, simple, "name")
+	assert.IsType(t, "", simple["name"])
+
+	var pet map[string]interface{}
+	err = json.Unmarshal(result.Examples["Pet"], &pet)
+	require.NoError(t, err)
+	require.Contains(t, pet, "purrs")
+	assert.IsType(t, true, pet["purrs"])
+}
