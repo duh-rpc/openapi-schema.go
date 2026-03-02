@@ -400,27 +400,77 @@ func generateObjectExample(schema *base.Schema, name string, ctx *ExampleContext
 
 	result := make(map[string]interface{})
 
-	if schema.Properties == nil {
-		return result, nil
-	}
-
 	ctx.depth++
 	defer func() {
 		ctx.depth--
 	}()
 
-	for propName, propProxy := range schema.Properties.FromOldest() {
-		propValue, err := generatePropertyValue(propName, propProxy, ctx)
-		if err != nil {
-			return nil, err
-		}
+	if schema.Properties != nil {
+		for propName, propProxy := range schema.Properties.FromOldest() {
+			propValue, err := generatePropertyValue(propName, propProxy, ctx)
+			if err != nil {
+				return nil, err
+			}
 
-		if propValue != nil {
-			result[propName] = propValue
+			if propValue != nil {
+				result[propName] = propValue
+			}
 		}
 	}
 
+	if err := mergeCompositionIntoObject(result, schema, name, ctx); err != nil {
+		return nil, err
+	}
+
 	return result, nil
+}
+
+// mergeCompositionIntoObject merges composition (allOf/oneOf/anyOf) properties into an object result.
+// Sibling properties take precedence over composition properties on name conflict.
+func mergeCompositionIntoObject(result map[string]interface{}, schema *base.Schema, name string, ctx *ExampleContext) error {
+	if len(schema.AllOf) > 0 {
+		composed, err := generateAllOfExample(schema, name, ctx)
+		if err != nil {
+			return err
+		}
+		if composedMap, ok := composed.(map[string]interface{}); ok {
+			for k, v := range composedMap {
+				if _, exists := result[k]; !exists {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	if len(schema.OneOf) > 0 {
+		composed, err := generateOneOfExample(schema, name, ctx)
+		if err != nil {
+			return err
+		}
+		if composedMap, ok := composed.(map[string]interface{}); ok {
+			for k, v := range composedMap {
+				if _, exists := result[k]; !exists {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	if len(schema.AnyOf) > 0 {
+		composed, err := generateAnyOfExample(schema, name, ctx)
+		if err != nil {
+			return err
+		}
+		if composedMap, ok := composed.(map[string]interface{}); ok {
+			for k, v := range composedMap {
+				if _, exists := result[k]; !exists {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // generateAllOfExample generates a merged example from all allOf sub-schemas
@@ -622,6 +672,15 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 	}
 
 	if len(schema.Type) == 0 {
+		if len(schema.AllOf) > 0 {
+			return generateAllOfExample(schema, propertyName, ctx)
+		}
+		if len(schema.OneOf) > 0 {
+			return generateOneOfExample(schema, propertyName, ctx)
+		}
+		if len(schema.AnyOf) > 0 {
+			return generateAnyOfExample(schema, propertyName, ctx)
+		}
 		return nil, fmt.Errorf("property must have type or $ref")
 	}
 

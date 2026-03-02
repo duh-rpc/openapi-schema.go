@@ -3115,6 +3115,263 @@ components:
 	}
 }
 
+func TestConvertToExamplesCompositionWithSiblingProperties(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "object with properties and oneOf merges both",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    SftpRequest:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+    HttpRequest:
+      type: object
+      properties:
+        url:
+          type: string
+    DeliveryCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      oneOf:
+        - $ref: '#/components/schemas/SftpRequest'
+        - $ref: '#/components/schemas/HttpRequest'
+`,
+			schema: "DeliveryCreateRequest",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				require.Contains(t, m, "host")
+				require.Contains(t, m, "port")
+				assert.IsType(t, "", m["name"])
+				assert.IsType(t, "", m["host"])
+			},
+		},
+		{
+			name: "sibling properties take precedence over composition properties",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "from-base"
+        code:
+          type: integer
+    Override:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "from-sibling"
+      allOf:
+        - $ref: '#/components/schemas/Base'
+`,
+			schema: "Override",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				require.Contains(t, m, "code")
+				assert.Equal(t, "from-sibling", m["name"])
+			},
+		},
+		{
+			name: "object with properties and allOf merges both",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Timestamps:
+      type: object
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Resource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+      allOf:
+        - $ref: '#/components/schemas/Timestamps'
+`,
+			schema: "Resource",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "id")
+				require.Contains(t, m, "created_at")
+				require.Contains(t, m, "updated_at")
+				assert.IsType(t, "", m["id"])
+				assert.IsType(t, "", m["created_at"])
+				assert.IsType(t, "", m["updated_at"])
+			},
+		},
+		{
+			name: "object with properties and anyOf merges both",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    EmailContact:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+    PhoneContact:
+      type: object
+      properties:
+        phone:
+          type: string
+    Person:
+      type: object
+      properties:
+        name:
+          type: string
+      anyOf:
+        - $ref: '#/components/schemas/EmailContact'
+        - $ref: '#/components/schemas/PhoneContact'
+`,
+			schema: "Person",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				require.Contains(t, m, "email")
+				assert.IsType(t, "", m["name"])
+				assert.IsType(t, "", m["email"])
+				assert.NotContains(t, m, "phone")
+			},
+		},
+		{
+			name: "discriminator value set correctly with sibling properties",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    SftpRequest:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+    HttpRequest:
+      type: object
+      properties:
+        url:
+          type: string
+    DeliveryCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      oneOf:
+        - $ref: '#/components/schemas/SftpRequest'
+        - $ref: '#/components/schemas/HttpRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          sftp: '#/components/schemas/SftpRequest'
+          http: '#/components/schemas/HttpRequest'
+`,
+			schema: "DeliveryCreateRequest",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				require.Contains(t, m, "host")
+				require.Contains(t, m, "port")
+				require.Contains(t, m, "type")
+				assert.Equal(t, "sftp", m["type"])
+			},
+		},
+		{
+			name: "nested object where property uses composition",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Name:
+      type: object
+      properties:
+        first:
+          type: string
+        last:
+          type: string
+    Age:
+      type: object
+      properties:
+        years:
+          type: integer
+    Wrapper:
+      type: object
+      properties:
+        person:
+          allOf:
+            - $ref: '#/components/schemas/Name'
+            - $ref: '#/components/schemas/Age'
+`,
+			schema: "Wrapper",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "person")
+				person := m["person"].(map[string]interface{})
+				require.Contains(t, person, "first")
+				require.Contains(t, person, "last")
+				require.Contains(t, person, "years")
+				assert.IsType(t, "", person["first"])
+				assert.IsType(t, "", person["last"])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
 func TestConvertToExamplesOneOfAlongsideSimpleSchemas(t *testing.T) {
 	openapi := `openapi: 3.0.0
 info:
