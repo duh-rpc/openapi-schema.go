@@ -133,6 +133,10 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 	}
 
 	if len(schema.Type) == 0 {
+		if len(schema.AllOf) > 0 {
+			return generateAllOfExample(schema, name, ctx)
+		}
+		// oneOf and anyOf branches will be added in Phase 2
 		return nil, fmt.Errorf("schema must have type or $ref")
 	}
 
@@ -408,6 +412,68 @@ func generateObjectExample(schema *base.Schema, name string, ctx *ExampleContext
 
 		if propValue != nil {
 			result[propName] = propValue
+		}
+	}
+
+	return result, nil
+}
+
+// generateAllOfExample generates a merged example from all allOf sub-schemas
+func generateAllOfExample(schema *base.Schema, name string, ctx *ExampleContext) (interface{}, error) {
+	result := make(map[string]interface{})
+
+	for i, entry := range schema.AllOf {
+		if entry == nil {
+			continue
+		}
+
+		var subExample interface{}
+		var err error
+
+		if entry.IsReference() {
+			ref := entry.GetReference()
+			refName, refErr := internal.ExtractReferenceName(ref)
+			if refErr != nil {
+				return nil, refErr
+			}
+
+			refEntry, ok := ctx.schemas[refName]
+			if !ok {
+				return nil, fmt.Errorf("schema '%s' not found", refName)
+			}
+
+			subExample, err = generateExample(refName, refEntry.Proxy, ctx)
+		} else {
+			entryName := fmt.Sprintf("%s/allOf[%d]", name, i)
+			subExample, err = generateExample(entryName, entry, ctx)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if subMap, ok := subExample.(map[string]interface{}); ok {
+			for k, v := range subMap {
+				result[k] = v
+			}
+		}
+	}
+
+	// Merge sibling properties from the schema itself
+	if schema.Properties != nil {
+		ctx.depth++
+		defer func() {
+			ctx.depth--
+		}()
+
+		for propName, propProxy := range schema.Properties.FromOldest() {
+			propValue, err := generatePropertyValue(propName, propProxy, ctx)
+			if err != nil {
+				return nil, err
+			}
+			if propValue != nil {
+				result[propName] = propValue
+			}
 		}
 	}
 

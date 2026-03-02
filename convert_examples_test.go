@@ -2449,3 +2449,305 @@ components:
 		})
 	}
 }
+
+func TestConvertToExamplesAllOf(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		openapi  string
+		schema   string
+		validate func(t *testing.T, value interface{})
+	}{
+		{
+			name: "allOf with two ref entries merges properties from both",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Name:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+    Person:
+      allOf:
+        - $ref: '#/components/schemas/Name'
+        - $ref: '#/components/schemas/Address'
+`,
+			schema: "Person",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "first_name")
+				require.Contains(t, m, "last_name")
+				require.Contains(t, m, "street")
+				require.Contains(t, m, "city")
+				assert.IsType(t, "", m["first_name"])
+				assert.IsType(t, "", m["last_name"])
+				assert.IsType(t, "", m["street"])
+				assert.IsType(t, "", m["city"])
+			},
+		},
+		{
+			name: "allOf with inline schema entries merges properties",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Combined:
+      allOf:
+        - type: object
+          properties:
+            name:
+              type: string
+        - type: object
+          properties:
+            age:
+              type: integer
+`,
+			schema: "Combined",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				require.Contains(t, m, "age")
+				assert.IsType(t, "", m["name"])
+				assert.IsType(t, float64(0), m["age"])
+			},
+		},
+		{
+			name: "allOf with ref plus inline schema merges both",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        id:
+          type: integer
+    Extended:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            label:
+              type: string
+`,
+			schema: "Extended",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "id")
+				require.Contains(t, m, "label")
+				assert.IsType(t, float64(0), m["id"])
+				assert.IsType(t, "", m["label"])
+			},
+		},
+		{
+			name: "allOf with overlapping property names uses later entry",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Overlap:
+      allOf:
+        - type: object
+          properties:
+            name:
+              type: string
+              example: "first"
+            code:
+              type: integer
+        - type: object
+          properties:
+            name:
+              type: string
+              example: "second"
+            label:
+              type: string
+`,
+			schema: "Overlap",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "name")
+				require.Contains(t, m, "code")
+				require.Contains(t, m, "label")
+				assert.Equal(t, "second", m["name"])
+			},
+		},
+		{
+			name: "nested allOf produces correct merged output",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Alpha:
+      type: object
+      properties:
+        alpha_field:
+          type: string
+    Beta:
+      allOf:
+        - $ref: '#/components/schemas/Alpha'
+        - type: object
+          properties:
+            beta_field:
+              type: integer
+    Gamma:
+      allOf:
+        - $ref: '#/components/schemas/Beta'
+        - type: object
+          properties:
+            gamma_field:
+              type: boolean
+`,
+			schema: "Gamma",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "alpha_field")
+				require.Contains(t, m, "beta_field")
+				require.Contains(t, m, "gamma_field")
+				assert.IsType(t, "", m["alpha_field"])
+				assert.IsType(t, float64(0), m["beta_field"])
+				assert.IsType(t, true, m["gamma_field"])
+			},
+		},
+		{
+			name: "allOf without type field does not error",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    NoType:
+      allOf:
+        - type: object
+          properties:
+            value:
+              type: string
+`,
+			schema: "NoType",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "value")
+				assert.IsType(t, "", m["value"])
+			},
+		},
+		{
+			name: "allOf with sibling properties merges both",
+			openapi: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        id:
+          type: integer
+    WithSiblings:
+      properties:
+        sibling_field:
+          type: string
+      allOf:
+        - $ref: '#/components/schemas/Base'
+`,
+			schema: "WithSiblings",
+			validate: func(t *testing.T, value interface{}) {
+				m := value.(map[string]interface{})
+				require.Contains(t, m, "id")
+				require.Contains(t, m, "sibling_field")
+				assert.IsType(t, float64(0), m["id"])
+				assert.IsType(t, "", m["sibling_field"])
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.ConvertToExamples([]byte(test.openapi), schema.ExampleOptions{
+				SchemaNames: []string{test.schema},
+				Seed:        42,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Contains(t, result.Examples, test.schema)
+
+			var value interface{}
+			err = json.Unmarshal(result.Examples[test.schema], &value)
+			require.NoError(t, err)
+
+			test.validate(t, value)
+		})
+	}
+}
+
+func TestConvertToExamplesAllOfAlongsideOtherSchemas(t *testing.T) {
+	openapi := `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Simple:
+      type: object
+      properties:
+        name:
+          type: string
+    Base:
+      type: object
+      properties:
+        id:
+          type: integer
+    Composed:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            extra:
+              type: string
+`
+
+	result, err := schema.ConvertToExamples([]byte(openapi), schema.ExampleOptions{
+		SchemaNames: []string{"Simple", "Composed"},
+		Seed:        42,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Both schemas should be generated successfully
+	require.Contains(t, result.Examples, "Simple")
+	require.Contains(t, result.Examples, "Composed")
+
+	// Verify Simple schema
+	var simple map[string]interface{}
+	err = json.Unmarshal(result.Examples["Simple"], &simple)
+	require.NoError(t, err)
+	require.Contains(t, simple, "name")
+	assert.IsType(t, "", simple["name"])
+
+	// Verify Composed schema
+	var composed map[string]interface{}
+	err = json.Unmarshal(result.Examples["Composed"], &composed)
+	require.NoError(t, err)
+	require.Contains(t, composed, "id")
+	require.Contains(t, composed, "extra")
+	assert.IsType(t, float64(0), composed["id"])
+	assert.IsType(t, "", composed["extra"])
+}
