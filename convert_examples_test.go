@@ -1,7 +1,6 @@
 package schema_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	schema "github.com/duh-rpc/openapi-schema.go"
@@ -52,7 +51,7 @@ func TestConvertToExamplesScalarTypes(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "simple string field",
@@ -68,12 +67,8 @@ components:
         name:
           type: string
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				assert.IsType(t, "", m["name"])
-			},
+			schema:   "User",
+			expected: `{"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "integer field",
@@ -89,13 +84,8 @@ components:
         quantity:
           type: integer
 `,
-			schema: "Product",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "quantity")
-				_, ok := m["quantity"].(float64)
-				assert.True(t, ok)
-			},
+			schema:   "Product",
+			expected: `{"quantity":6}`,
 		},
 		{
 			name: "boolean field",
@@ -111,12 +101,8 @@ components:
         enabled:
           type: boolean
 `,
-			schema: "Settings",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "enabled")
-				assert.IsType(t, true, m["enabled"])
-			},
+			schema:   "Settings",
+			expected: `{"enabled":true}`,
 		},
 		{
 			name: "number field",
@@ -132,12 +118,8 @@ components:
         amount:
           type: number
 `,
-			schema: "Price",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "amount")
-				assert.IsType(t, 0.0, m["amount"])
-			},
+			schema:   "Price",
+			expected: `{"amount":37.92980774361663}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -148,12 +130,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -163,7 +140,7 @@ func TestConvertToExamplesConstraints(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "integer with min and max",
@@ -181,14 +158,8 @@ components:
           minimum: 10
           maximum: 50
 `,
-			schema: "Product",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "quantity")
-				quantity := int(m["quantity"].(float64))
-				assert.GreaterOrEqual(t, quantity, 10)
-				assert.LessOrEqual(t, quantity, 50)
-			},
+			schema:   "Product",
+			expected: `{"quantity":47}`,
 		},
 		{
 			name: "number with min and max",
@@ -206,14 +177,8 @@ components:
           minimum: 1.5
           maximum: 99.99
 `,
-			schema: "Price",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "amount")
-				amount := m["amount"].(float64)
-				assert.GreaterOrEqual(t, amount, 1.5)
-				assert.LessOrEqual(t, amount, 99.99)
-			},
+			schema:   "Price",
+			expected: `{"amount":38.239563279482844}`,
 		},
 		{
 			name: "default value used",
@@ -230,12 +195,8 @@ components:
           type: integer
           default: 30
 `,
-			schema: "Settings",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "timeout")
-				assert.Equal(t, float64(30), m["timeout"])
-			},
+			schema:   "Settings",
+			expected: `{"timeout":30}`,
 		},
 		{
 			name: "example value used",
@@ -252,12 +213,8 @@ components:
           type: string
           example: "John Doe"
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				assert.Equal(t, "John Doe", m["name"])
-			},
+			schema:   "User",
+			expected: `{"name":"John Doe"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -268,12 +225,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -303,13 +255,7 @@ components:
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Contains(t, result.Examples, "Status")
-
-	var value map[string]interface{}
-	err = json.Unmarshal(result.Examples["Status"], &value)
-	require.NoError(t, err)
-
-	require.Contains(t, value, "state")
-	assert.Equal(t, "pending", value["state"])
+	assert.JSONEq(t, `{"state":"pending"}`, string(result.Examples["Status"]))
 }
 
 func TestConvertToExamplesDeterministic(t *testing.T) {
@@ -453,7 +399,7 @@ func TestConvertToExamplesObjects(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "simple object with scalar properties",
@@ -473,16 +419,8 @@ components:
         active:
           type: boolean
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "age")
-				require.Contains(t, m, "active")
-				assert.IsType(t, "", m["name"])
-				assert.IsType(t, float64(0), m["age"])
-				assert.IsType(t, true, m["active"])
-			},
+			schema:   "User",
+			expected: `{"active":true,"age":30,"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "object with mixed types",
@@ -504,14 +442,8 @@ components:
         inStock:
           type: boolean
 `,
-			schema: "Product",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "title")
-				require.Contains(t, m, "price")
-				require.Contains(t, m, "quantity")
-				require.Contains(t, m, "inStock")
-			},
+			schema:   "Product",
+			expected: `{"inStock":true,"price":73.8273024155778,"quantity":68,"title":"dl2INvNSQT"}`,
 		},
 		{
 			name: "empty object",
@@ -524,11 +456,8 @@ components:
     Empty:
       type: object
 `,
-			schema: "Empty",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Empty(t, m)
-			},
+			schema:   "Empty",
+			expected: `{}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -539,12 +468,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -554,7 +478,7 @@ func TestConvertToExamplesNestedObjects(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "object with nested object property",
@@ -579,20 +503,8 @@ components:
             zipCode:
               type: integer
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "address")
-
-				address := m["address"].(map[string]interface{})
-				require.Contains(t, address, "street")
-				require.Contains(t, address, "city")
-				require.Contains(t, address, "zipCode")
-				assert.IsType(t, "", address["street"])
-				assert.IsType(t, "", address["city"])
-				assert.IsType(t, float64(0), address["zipCode"])
-			},
+			schema:   "User",
+			expected: `{"address":{"city":"GyAVmNkB33","street":"Z5zQu9MxNm","zipCode":83},"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "deeply nested objects",
@@ -623,23 +535,8 @@ components:
                     lng:
                       type: number
 `,
-			schema: "Company",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "headquarters")
-
-				hq := m["headquarters"].(map[string]interface{})
-				require.Contains(t, hq, "address")
-
-				address := hq["address"].(map[string]interface{})
-				require.Contains(t, address, "street")
-				require.Contains(t, address, "location")
-
-				location := address["location"].(map[string]interface{})
-				require.Contains(t, location, "lat")
-				require.Contains(t, location, "lng")
-			},
+			schema:   "Company",
+			expected: `{"headquarters":{"address":{"location":{"lat":12.813847879609565,"lng":34.67652672737327},"street":"Z5zQu9MxNm"}},"name":"dl2INvNSQT"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -650,12 +547,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -706,21 +598,7 @@ components:
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-
-	var value map[string]interface{}
-	err = json.Unmarshal(result.Examples["Level1"], &value)
-	require.NoError(t, err)
-
-	require.Contains(t, value, "name")
-	require.Contains(t, value, "level2")
-
-	level2 := value["level2"].(map[string]interface{})
-	require.Contains(t, level2, "name")
-	require.Contains(t, level2, "level3")
-
-	level3 := level2["level3"].(map[string]interface{})
-	require.Contains(t, level3, "name")
-	assert.NotContains(t, level3, "level4")
+	assert.JSONEq(t, `{"level2":{"level3":{"name":"GyAVmNkB33"},"name":"Z5zQu9MxNm"},"name":"dl2INvNSQT"}`, string(result.Examples["Level1"]))
 }
 
 func TestConvertToExamplesArrays(t *testing.T) {
@@ -728,7 +606,7 @@ func TestConvertToExamplesArrays(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "array with scalar items",
@@ -746,14 +624,8 @@ components:
           items:
             type: string
 `,
-			schema: "TagList",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "tags")
-				tags := m["tags"].([]interface{})
-				assert.Len(t, tags, 1)
-				assert.IsType(t, "", tags[0])
-			},
+			schema:   "TagList",
+			expected: `{"tags":["dl2INvNSQT"]}`,
 		},
 		{
 			name: "array with integer items",
@@ -771,14 +643,8 @@ components:
           items:
             type: integer
 `,
-			schema: "Numbers",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "values")
-				values := m["values"].([]interface{})
-				assert.Len(t, values, 1)
-				assert.IsType(t, float64(0), values[0])
-			},
+			schema:   "Numbers",
+			expected: `{"values":[6]}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -789,12 +655,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -804,7 +665,7 @@ func TestConvertToExamplesArrayConstraints(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "array with minItems",
@@ -823,13 +684,8 @@ components:
           items:
             type: string
 `,
-			schema: "TagList",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "tags")
-				tags := m["tags"].([]interface{})
-				assert.GreaterOrEqual(t, len(tags), 3)
-			},
+			schema:   "TagList",
+			expected: `{"tags":["dl2INvNSQT","Z5zQu9MxNm","GyAVmNkB33"]}`,
 		},
 		{
 			name: "array with maxItems",
@@ -849,13 +705,8 @@ components:
           items:
             type: integer
 `,
-			schema: "Limited",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "items")
-				items := m["items"].([]interface{})
-				assert.Len(t, items, 5)
-			},
+			schema:   "Limited",
+			expected: `{"items":[6,88,69,51,24]}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -866,12 +717,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -904,20 +750,7 @@ components:
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-
-	var value map[string]interface{}
-	err = json.Unmarshal(result.Examples["UserList"], &value)
-	require.NoError(t, err)
-
-	require.Contains(t, value, "users")
-	users := value["users"].([]interface{})
-	assert.GreaterOrEqual(t, len(users), 2)
-
-	user := users[0].(map[string]interface{})
-	require.Contains(t, user, "name")
-	require.Contains(t, user, "age")
-	assert.IsType(t, "", user["name"])
-	assert.IsType(t, float64(0), user["age"])
+	assert.JSONEq(t, `{"users":[{"age":30,"name":"dl2INvNSQT"},{"age":35,"name":"5zQu9MxNmG"}]}`, string(result.Examples["UserList"]))
 }
 
 func TestConvertToExamplesInvalidArraySchema(t *testing.T) {
@@ -980,7 +813,7 @@ func TestConvertToExamplesReferences(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "simple reference",
@@ -1005,16 +838,8 @@ components:
         address:
           $ref: '#/components/schemas/Address'
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "address")
-
-				address := m["address"].(map[string]interface{})
-				require.Contains(t, address, "street")
-				require.Contains(t, address, "city")
-			},
+			schema:   "User",
+			expected: `{"address":{"city":"GyAVmNkB33","street":"Z5zQu9MxNm"},"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "nested references",
@@ -1046,20 +871,8 @@ components:
         address:
           $ref: '#/components/schemas/Address'
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "address")
-
-				address := m["address"].(map[string]interface{})
-				require.Contains(t, address, "street")
-				require.Contains(t, address, "city")
-
-				city := address["city"].(map[string]interface{})
-				require.Contains(t, city, "name")
-				require.Contains(t, city, "zipCode")
-			},
+			schema:   "User",
+			expected: `{"address":{"city":{"name":"GyAVmNkB33","zipCode":83},"street":"Z5zQu9MxNm"},"name":"dl2INvNSQT"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1070,12 +883,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -1085,7 +893,7 @@ func TestConvertToExamplesCircularReferences(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "direct circular reference",
@@ -1103,12 +911,8 @@ components:
         next:
           $ref: '#/components/schemas/Node'
 `,
-			schema: "Node",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "value")
-				assert.NotContains(t, m, "next")
-			},
+			schema:   "Node",
+			expected: `{"value":6}`,
 		},
 		{
 			name: "indirect circular reference",
@@ -1133,16 +937,8 @@ components:
         owner:
           $ref: '#/components/schemas/User'
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "address")
-
-				address := m["address"].(map[string]interface{})
-				require.Contains(t, address, "street")
-				assert.NotContains(t, address, "owner")
-			},
+			schema:   "User",
+			expected: `{"address":{"street":"Z5zQu9MxNm"},"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "three-way circular reference",
@@ -1174,20 +970,8 @@ components:
         a:
           $ref: '#/components/schemas/A'
 `,
-			schema: "A",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "b")
-
-				b := m["b"].(map[string]interface{})
-				require.Contains(t, b, "value")
-				require.Contains(t, b, "c")
-
-				c := b["c"].(map[string]interface{})
-				require.Contains(t, c, "flag")
-				assert.NotContains(t, c, "a")
-			},
+			schema:   "A",
+			expected: `{"b":{"c":{"flag":true},"value":30},"name":"dl2INvNSQT"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1198,12 +982,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -1232,13 +1011,7 @@ components:
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Contains(t, result.Examples, "ErrorResponse")
-
-	var value map[string]interface{}
-	err = json.Unmarshal(result.Examples["ErrorResponse"], &value)
-	require.NoError(t, err)
-
-	require.Contains(t, value, "code")
-	require.Contains(t, value, "message")
+	assert.JSONEq(t, `{"code":400,"message":"This is a message"}`, string(result.Examples["ErrorResponse"]))
 }
 
 func TestConvertToExamplesRandomDefaults(t *testing.T) {
@@ -1246,7 +1019,7 @@ func TestConvertToExamplesRandomDefaults(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "integer without constraints generates random 1-100",
@@ -1262,15 +1035,8 @@ components:
         quantity:
           type: integer
 `,
-			schema: "Product",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "quantity")
-				quantity := int(m["quantity"].(float64))
-				assert.GreaterOrEqual(t, quantity, 1)
-				assert.LessOrEqual(t, quantity, 100)
-				assert.NotEqual(t, 0, quantity)
-			},
+			schema:   "Product",
+			expected: `{"quantity":6}`,
 		},
 		{
 			name: "number without constraints generates random 1.0-100.0",
@@ -1286,15 +1052,8 @@ components:
         amount:
           type: number
 `,
-			schema: "Price",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "amount")
-				amount := m["amount"].(float64)
-				assert.GreaterOrEqual(t, amount, 1.0)
-				assert.LessOrEqual(t, amount, 100.0)
-				assert.NotEqual(t, 0.0, amount)
-			},
+			schema:   "Price",
+			expected: `{"amount":37.92980774361663}`,
 		},
 		{
 			name: "deterministic with fixed seed",
@@ -1312,18 +1071,8 @@ components:
         value:
           type: number
 `,
-			schema: "Data",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "count")
-				require.Contains(t, m, "value")
-				count := int(m["count"].(float64))
-				valueNum := m["value"].(float64)
-				assert.GreaterOrEqual(t, count, 1)
-				assert.LessOrEqual(t, count, 100)
-				assert.GreaterOrEqual(t, valueNum, 1.0)
-				assert.LessOrEqual(t, valueNum, 100.0)
-			},
+			schema:   "Data",
+			expected: `{"count":6,"value":7.534049182558273}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1334,46 +1083,41 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
 
 func TestConvertToExamplesCursorHeuristics(t *testing.T) {
 	for _, test := range []struct {
-		name        string
-		fieldName   string
-		shouldMatch bool
+		name      string
+		fieldName string
+		expected  string
 	}{
 		{
-			name:        "cursor field lowercase",
-			fieldName:   "cursor",
-			shouldMatch: true,
+			name:      "cursor field lowercase",
+			fieldName: "cursor",
+			expected:  `{"cursor":"le+FHLiWt5VNCmTe5VqQw"}`,
 		},
 		{
-			name:        "first field lowercase",
-			fieldName:   "first",
-			shouldMatch: true,
+			name:      "first field lowercase",
+			fieldName: "first",
+			expected:  `{"first":"le+FHLiWt5VNCmTe5VqQw"}`,
 		},
 		{
-			name:        "after field lowercase",
-			fieldName:   "after",
-			shouldMatch: true,
+			name:      "after field lowercase",
+			fieldName: "after",
+			expected:  `{"after":"le+FHLiWt5VNCmTe5VqQw"}`,
 		},
 		{
-			name:        "Cursor field capitalized",
-			fieldName:   "Cursor",
-			shouldMatch: true,
+			name:      "Cursor field capitalized",
+			fieldName: "Cursor",
+			expected:  `{"Cursor":"le+FHLiWt5VNCmTe5VqQw"}`,
 		},
 		{
-			name:        "other field does not match",
-			fieldName:   "other",
-			shouldMatch: false,
+			name:      "other field does not match",
+			fieldName: "other",
+			expected:  `{"other":"dl2INvNSQT"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1396,61 +1140,36 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, "Pagination")
-
-			var value map[string]interface{}
-			err = json.Unmarshal(result.Examples["Pagination"], &value)
-			require.NoError(t, err)
-			require.Contains(t, value, test.fieldName)
-
-			fieldValue := value[test.fieldName].(string)
-
-			if test.shouldMatch {
-				assert.GreaterOrEqual(t, len(fieldValue), 16)
-				assert.LessOrEqual(t, len(fieldValue), 32)
-
-				for _, ch := range fieldValue {
-					valid := (ch >= 'a' && ch <= 'z') ||
-						(ch >= 'A' && ch <= 'Z') ||
-						(ch >= '0' && ch <= '9') ||
-						ch == '+' || ch == '/'
-					assert.True(t, valid)
-				}
-			} else {
-				assert.Len(t, fieldValue, 10)
-			}
+			assert.JSONEq(t, test.expected, string(result.Examples["Pagination"]))
 		})
 	}
 }
 
 func TestConvertToExamplesMessageHeuristics(t *testing.T) {
 	for _, test := range []struct {
-		name        string
-		fieldName   string
-		expected    string
-		shouldMatch bool
+		name      string
+		fieldName string
+		expected  string
 	}{
 		{
-			name:        "error field lowercase",
-			fieldName:   "error",
-			expected:    "An error occurred",
-			shouldMatch: true,
+			name:      "error field lowercase",
+			fieldName: "error",
+			expected:  `{"error":"An error occurred"}`,
 		},
 		{
-			name:        "message field lowercase",
-			fieldName:   "message",
-			expected:    "This is a message",
-			shouldMatch: true,
+			name:      "message field lowercase",
+			fieldName: "message",
+			expected:  `{"message":"This is a message"}`,
 		},
 		{
-			name:        "Error field capitalized",
-			fieldName:   "Error",
-			expected:    "An error occurred",
-			shouldMatch: true,
+			name:      "Error field capitalized",
+			fieldName: "Error",
+			expected:  `{"Error":"An error occurred"}`,
 		},
 		{
-			name:        "description field does not match",
-			fieldName:   "description",
-			shouldMatch: false,
+			name:      "description field does not match",
+			fieldName: "description",
+			expected:  `{"description":"dl2INvNSQT"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1473,19 +1192,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, "Response")
-
-			var value map[string]interface{}
-			err = json.Unmarshal(result.Examples["Response"], &value)
-			require.NoError(t, err)
-			require.Contains(t, value, test.fieldName)
-
-			fieldValue := value[test.fieldName].(string)
-
-			if test.shouldMatch {
-				assert.Equal(t, test.expected, fieldValue)
-			} else {
-				assert.Len(t, fieldValue, 10)
-			}
+			assert.JSONEq(t, test.expected, string(result.Examples["Response"]))
 		})
 	}
 }
@@ -1495,7 +1202,7 @@ func TestConvertToExamplesFieldOverridePriority(t *testing.T) {
 		name      string
 		openapi   string
 		overrides map[string]interface{}
-		validate  func(t *testing.T, value map[string]interface{})
+		expected  string
 	}{
 		{
 			name: "override takes precedence over heuristics",
@@ -1512,10 +1219,7 @@ components:
           type: string
 `,
 			overrides: map[string]interface{}{"message": "custom message"},
-			validate: func(t *testing.T, value map[string]interface{}) {
-				require.Contains(t, value, "message")
-				assert.Equal(t, "custom message", value["message"])
-			},
+			expected:  `{"message":"custom message"}`,
 		},
 		{
 			name: "schema example takes precedence over override",
@@ -1533,11 +1237,7 @@ components:
           example: 200
 `,
 			overrides: map[string]interface{}{"code": 400},
-			validate: func(t *testing.T, value map[string]interface{}) {
-				require.Contains(t, value, "code")
-				code := value["code"].(float64)
-				assert.Equal(t, 200.0, code)
-			},
+			expected:  `{"code":200}`,
 		},
 		{
 			name: "schema default takes precedence over override",
@@ -1555,10 +1255,7 @@ components:
           default: false
 `,
 			overrides: map[string]interface{}{"enabled": true},
-			validate: func(t *testing.T, value map[string]interface{}) {
-				require.Contains(t, value, "enabled")
-				assert.Equal(t, false, value["enabled"])
-			},
+			expected:  `{"enabled":false}`,
 		},
 		{
 			name: "multiple field overrides",
@@ -1583,15 +1280,7 @@ components:
 				"status":  "error",
 				"message": "Internal server error",
 			},
-			validate: func(t *testing.T, value map[string]interface{}) {
-				require.Contains(t, value, "code")
-				require.Contains(t, value, "status")
-				require.Contains(t, value, "message")
-				code := value["code"].(float64)
-				assert.Equal(t, 500.0, code)
-				assert.Equal(t, "error", value["status"])
-				assert.Equal(t, "Internal server error", value["message"])
-			},
+			expected: `{"code":500,"message":"Internal server error","status":"error"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1603,18 +1292,13 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
-			var value map[string]interface{}
-			schemaName := ""
+			var schemaName string
 			for name := range result.Examples {
 				schemaName = name
 				break
 			}
 			require.NotEmpty(t, schemaName)
-
-			err = json.Unmarshal(result.Examples[schemaName], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[schemaName]))
 		})
 	}
 }
@@ -1713,7 +1397,7 @@ func TestConvertToExamplesSchemaLevelExample(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "schema with complete example object",
@@ -1737,13 +1421,8 @@ components:
         status:
           type: string
 `,
-			schema: "Transfer",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "xfer_complete_example", m["id"])
-				assert.Equal(t, float64(100), m["amount"])
-				assert.Equal(t, "completed", m["status"])
-			},
+			schema:   "Transfer",
+			expected: `{"amount":100,"id":"xfer_complete_example","status":"completed"}`,
 		},
 		{
 			name: "schema-level example with nested object",
@@ -1771,14 +1450,8 @@ components:
             city:
               type: string
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "John Doe", m["name"])
-				address := m["address"].(map[string]interface{})
-				assert.Equal(t, "123 Main St", address["street"])
-				assert.Equal(t, "Springfield", address["city"])
-			},
+			schema:   "User",
+			expected: `{"address":{"city":"Springfield","street":"123 Main St"},"name":"John Doe"}`,
 		},
 		{
 			name: "schema-level example with array",
@@ -1804,16 +1477,8 @@ components:
           items:
             type: string
 `,
-			schema: "Order",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "ord_123", m["orderId"])
-				items := m["items"].([]interface{})
-				assert.Len(t, items, 3)
-				assert.Equal(t, "item1", items[0])
-				assert.Equal(t, "item2", items[1])
-				assert.Equal(t, "item3", items[2])
-			},
+			schema:   "Order",
+			expected: `{"items":["item1","item2","item3"],"orderId":"ord_123"}`,
 		},
 		{
 			name: "schema-level example takes precedence over property examples",
@@ -1836,12 +1501,8 @@ components:
           type: integer
           example: 100
 `,
-			schema: "Product",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "Schema Level Name", m["name"])
-				assert.Equal(t, float64(999), m["price"])
-			},
+			schema:   "Product",
+			expected: `{"name":"Schema Level Name","price":999}`,
 		},
 		{
 			name: "schema-level example with null value",
@@ -1858,10 +1519,8 @@ components:
         value:
           type: string
 `,
-			schema: "NullableData",
-			validate: func(t *testing.T, value interface{}) {
-				assert.Nil(t, value)
-			},
+			schema:   "NullableData",
+			expected: "null",
 		},
 		{
 			name: "schema-level example with boolean values",
@@ -1882,12 +1541,8 @@ components:
         disabled:
           type: boolean
 `,
-			schema: "Flags",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, true, m["enabled"])
-				assert.Equal(t, false, m["disabled"])
-			},
+			schema:   "Flags",
+			expected: `{"disabled":false,"enabled":true}`,
 		},
 		{
 			name: "schema-level example with float values",
@@ -1908,12 +1563,8 @@ components:
         pressure:
           type: number
 `,
-			schema: "Measurement",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, 98.6, m["temperature"])
-				assert.Equal(t, 1013.25, m["pressure"])
-			},
+			schema:   "Measurement",
+			expected: `{"pressure":1013.25,"temperature":98.6}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1925,11 +1576,11 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			if test.expected == "null" {
+				assert.Equal(t, "null", string(result.Examples[test.schema]))
+			} else {
+				assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
+			}
 		})
 	}
 }
@@ -1939,7 +1590,7 @@ func TestConvertToExamplesSchemaLevelExamplesArray(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "schema with examples array uses first entry",
@@ -1962,12 +1613,8 @@ components:
         amount:
           type: integer
 `,
-			schema: "Payment",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "pay_first_example", m["id"])
-				assert.Equal(t, float64(50), m["amount"])
-			},
+			schema:   "Payment",
+			expected: `{"amount":50,"id":"pay_first_example"}`,
 		},
 		{
 			name: "example singular takes precedence over examples array",
@@ -1987,11 +1634,8 @@ components:
         value:
           type: string
 `,
-			schema: "Data",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "from singular example", m["value"])
-			},
+			schema:   "Data",
+			expected: `{"value":"from singular example"}`,
 		},
 		{
 			name: "empty examples array falls back to generation",
@@ -2008,12 +1652,8 @@ components:
         name:
           type: string
 `,
-			schema: "Generated",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				assert.IsType(t, "", m["name"])
-			},
+			schema:   "Generated",
+			expected: `{"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "examples array with nested objects",
@@ -2045,17 +1685,8 @@ components:
           items:
             type: string
 `,
-			schema: "ComplexData",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				user := m["user"].(map[string]interface{})
-				assert.Equal(t, "Alice", user["name"])
-				assert.Equal(t, float64(30), user["age"])
-				tags := m["tags"].([]interface{})
-				assert.Len(t, tags, 2)
-				assert.Equal(t, "premium", tags[0])
-				assert.Equal(t, "verified", tags[1])
-			},
+			schema:   "ComplexData",
+			expected: `{"tags":["premium","verified"],"user":{"age":30,"name":"Alice"}}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2067,11 +1698,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -2081,7 +1708,7 @@ func TestConvertToExamplesPropertyLevelExamples(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "property with examples array uses first entry",
@@ -2102,11 +1729,8 @@ components:
         amount:
           type: integer
 `,
-			schema: "Payment",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "txn_first_example", m["transactionId"])
-			},
+			schema:   "Payment",
+			expected: `{"amount":6,"transactionId":"txn_first_example"}`,
 		},
 		{
 			name: "property example takes precedence over examples array",
@@ -2125,11 +1749,8 @@ components:
           examples:
             - "from examples array"
 `,
-			schema: "Data",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "from singular example", m["value"])
-			},
+			schema:   "Data",
+			expected: `{"value":"from singular example"}`,
 		},
 		{
 			name: "property with empty examples array falls back to generation",
@@ -2146,12 +1767,8 @@ components:
           type: string
           examples: []
 `,
-			schema: "Generated",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				assert.IsType(t, "", m["name"])
-			},
+			schema:   "Generated",
+			expected: `{"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "multiple properties with examples",
@@ -2174,14 +1791,8 @@ components:
         generated:
           type: string
 `,
-			schema: "MultipleExamples",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, "id_from_example", m["id"])
-				assert.Equal(t, "code_from_examples", m["code"])
-				require.Contains(t, m, "generated")
-				assert.IsType(t, "", m["generated"])
-			},
+			schema:   "MultipleExamples",
+			expected: `{"code":"code_from_examples","generated":"dl2INvNSQT","id":"id_from_example"}`,
 		},
 		{
 			name: "integer property with examples array",
@@ -2200,11 +1811,8 @@ components:
             - 42
             - 100
 `,
-			schema: "NumericData",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, float64(42), m["count"])
-			},
+			schema:   "NumericData",
+			expected: `{"count":42}`,
 		},
 		{
 			name: "boolean property with examples array",
@@ -2223,11 +1831,8 @@ components:
             - true
             - false
 `,
-			schema: "Flags",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				assert.Equal(t, true, m["enabled"])
-			},
+			schema:   "Flags",
+			expected: `{"enabled":true}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2239,11 +1844,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -2253,7 +1854,7 @@ func TestConvertToExamplesPropertyLevelExampleObject(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "object property with example uses that example",
@@ -2282,15 +1883,8 @@ components:
             zip:
               type: integer
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "address")
-				address := m["address"].(map[string]interface{})
-				assert.Equal(t, "123 Custom St", address["street"])
-				assert.Equal(t, "Example City", address["city"])
-				assert.Equal(t, float64(12345), address["zip"])
-			},
+			schema:   "User",
+			expected: `{"address":{"city":"Example City","street":"123 Custom St","zip":12345},"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "array property with example uses that example",
@@ -2312,16 +1906,8 @@ components:
           items:
             type: string
 `,
-			schema: "TagList",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "tags")
-				tags := m["tags"].([]interface{})
-				assert.Len(t, tags, 3)
-				assert.Equal(t, "custom-tag-1", tags[0])
-				assert.Equal(t, "custom-tag-2", tags[1])
-				assert.Equal(t, "custom-tag-3", tags[2])
-			},
+			schema:   "TagList",
+			expected: `{"tags":["custom-tag-1","custom-tag-2","custom-tag-3"]}`,
 		},
 		{
 			name: "object property with examples array uses first entry",
@@ -2347,14 +1933,8 @@ components:
             value:
               type: string
 `,
-			schema: "Order",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "metadata")
-				metadata := m["metadata"].(map[string]interface{})
-				assert.Equal(t, "first_key", metadata["key"])
-				assert.Equal(t, "first_value", metadata["value"])
-			},
+			schema:   "Order",
+			expected: `{"metadata":{"key":"first_key","value":"first_value"}}`,
 		},
 		{
 			name: "array property with examples array uses first entry",
@@ -2376,15 +1956,8 @@ components:
           items:
             type: string
 `,
-			schema: "ItemList",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "items")
-				items := m["items"].([]interface{})
-				assert.Len(t, items, 2)
-				assert.Equal(t, "first-array-item-1", items[0])
-				assert.Equal(t, "first-array-item-2", items[1])
-			},
+			schema:   "ItemList",
+			expected: `{"items":["first-array-item-1","first-array-item-2"]}`,
 		},
 		{
 			name: "nested object with complex example",
@@ -2419,21 +1992,8 @@ components:
                   city:
                     type: string
 `,
-			schema: "Order",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "customer")
-				customer := m["customer"].(map[string]interface{})
-				assert.Equal(t, "John Doe", customer["name"])
-				addresses := customer["addresses"].([]interface{})
-				assert.Len(t, addresses, 2)
-				addr1 := addresses[0].(map[string]interface{})
-				assert.Equal(t, "123 Main St", addr1["street"])
-				assert.Equal(t, "NYC", addr1["city"])
-				addr2 := addresses[1].(map[string]interface{})
-				assert.Equal(t, "456 Oak Ave", addr2["street"])
-				assert.Equal(t, "LA", addr2["city"])
-			},
+			schema:   "Order",
+			expected: `{"customer":{"addresses":[{"city":"NYC","street":"123 Main St"},{"city":"LA","street":"456 Oak Ave"}],"name":"John Doe"}}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2445,11 +2005,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -2459,7 +2015,7 @@ func TestConvertToExamplesAllOf(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "allOf with two ref entries merges properties from both",
@@ -2488,18 +2044,8 @@ components:
         - $ref: '#/components/schemas/Name'
         - $ref: '#/components/schemas/Address'
 `,
-			schema: "Person",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "first_name")
-				require.Contains(t, m, "last_name")
-				require.Contains(t, m, "street")
-				require.Contains(t, m, "city")
-				assert.IsType(t, "", m["first_name"])
-				assert.IsType(t, "", m["last_name"])
-				assert.IsType(t, "", m["street"])
-				assert.IsType(t, "", m["city"])
-			},
+			schema:   "Person",
+			expected: `{"city":"ionwj2qrsh","first_name":"dl2INvNSQT","last_name":"Z5zQu9MxNm","street":"GyAVmNkB33"}`,
 		},
 		{
 			name: "allOf with inline schema entries merges properties",
@@ -2520,14 +2066,8 @@ components:
             age:
               type: integer
 `,
-			schema: "Combined",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "age")
-				assert.IsType(t, "", m["name"])
-				assert.IsType(t, float64(0), m["age"])
-			},
+			schema:   "Combined",
+			expected: `{"age":30,"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "allOf with ref plus inline schema merges both",
@@ -2550,14 +2090,8 @@ components:
             label:
               type: string
 `,
-			schema: "Extended",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "id")
-				require.Contains(t, m, "label")
-				assert.IsType(t, float64(0), m["id"])
-				assert.IsType(t, "", m["label"])
-			},
+			schema:   "Extended",
+			expected: `{"id":6,"label":"l2INvNSQTZ"}`,
 		},
 		{
 			name: "allOf with overlapping property names uses later entry",
@@ -2584,14 +2118,8 @@ components:
             label:
               type: string
 `,
-			schema: "Overlap",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "code")
-				require.Contains(t, m, "label")
-				assert.Equal(t, "second", m["name"])
-			},
+			schema:   "Overlap",
+			expected: `{"code":6,"label":"l2INvNSQTZ","name":"second"}`,
 		},
 		{
 			name: "nested allOf produces correct merged output",
@@ -2621,16 +2149,8 @@ components:
             gamma_field:
               type: boolean
 `,
-			schema: "Gamma",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "alpha_field")
-				require.Contains(t, m, "beta_field")
-				require.Contains(t, m, "gamma_field")
-				assert.IsType(t, "", m["alpha_field"])
-				assert.IsType(t, float64(0), m["beta_field"])
-				assert.IsType(t, true, m["gamma_field"])
-			},
+			schema:   "Gamma",
+			expected: `{"alpha_field":"dl2INvNSQT","beta_field":30,"gamma_field":true}`,
 		},
 		{
 			name: "allOf without type field does not error",
@@ -2647,12 +2167,8 @@ components:
             value:
               type: string
 `,
-			schema: "NoType",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "value")
-				assert.IsType(t, "", m["value"])
-			},
+			schema:   "NoType",
+			expected: `{"value":"dl2INvNSQT"}`,
 		},
 		{
 			name: "allOf with sibling properties merges both",
@@ -2674,14 +2190,8 @@ components:
       allOf:
         - $ref: '#/components/schemas/Base'
 `,
-			schema: "WithSiblings",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "id")
-				require.Contains(t, m, "sibling_field")
-				assert.IsType(t, float64(0), m["id"])
-				assert.IsType(t, "", m["sibling_field"])
-			},
+			schema:   "WithSiblings",
+			expected: `{"id":6,"sibling_field":"l2INvNSQTZ"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2693,11 +2203,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -2735,25 +2241,11 @@ components:
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Both schemas should be generated successfully
 	require.Contains(t, result.Examples, "Simple")
 	require.Contains(t, result.Examples, "Composed")
 
-	// Verify Simple schema
-	var simple map[string]interface{}
-	err = json.Unmarshal(result.Examples["Simple"], &simple)
-	require.NoError(t, err)
-	require.Contains(t, simple, "name")
-	assert.IsType(t, "", simple["name"])
-
-	// Verify Composed schema
-	var composed map[string]interface{}
-	err = json.Unmarshal(result.Examples["Composed"], &composed)
-	require.NoError(t, err)
-	require.Contains(t, composed, "id")
-	require.Contains(t, composed, "extra")
-	assert.IsType(t, float64(0), composed["id"])
-	assert.IsType(t, "", composed["extra"])
+	assert.JSONEq(t, `{"name":"dl2INvNSQT"}`, string(result.Examples["Simple"]))
+	assert.JSONEq(t, `{"extra":"5zQu9MxNmG","id":30}`, string(result.Examples["Composed"]))
 }
 
 func TestConvertToExamplesOneOf(t *testing.T) {
@@ -2761,7 +2253,7 @@ func TestConvertToExamplesOneOf(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "oneOf with ref variants picks first variant",
@@ -2786,13 +2278,8 @@ components:
         - $ref: '#/components/schemas/Cat'
         - $ref: '#/components/schemas/Dog'
 `,
-			schema: "Pet",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "purrs")
-				assert.IsType(t, true, m["purrs"])
-				assert.NotContains(t, m, "barks")
-			},
+			schema:   "Pet",
+			expected: `{"purrs":true}`,
 		},
 		{
 			name: "oneOf without type field does not error",
@@ -2813,13 +2300,8 @@ components:
             code:
               type: integer
 `,
-			schema: "Variant",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				assert.IsType(t, "", m["name"])
-				assert.NotContains(t, m, "code")
-			},
+			schema:   "Variant",
+			expected: `{"name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "oneOf with inline schemas picks first variant",
@@ -2840,13 +2322,8 @@ components:
             beta:
               type: integer
 `,
-			schema: "InlineVariant",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "alpha")
-				assert.IsType(t, "", m["alpha"])
-				assert.NotContains(t, m, "beta")
-			},
+			schema:   "InlineVariant",
+			expected: `{"alpha":"dl2INvNSQT"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2858,11 +2335,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -2872,7 +2345,7 @@ func TestConvertToExamplesOneOfWithDiscriminator(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "discriminator sets property to schema name",
@@ -2899,13 +2372,8 @@ components:
       discriminator:
         propertyName: petType
 `,
-			schema: "Pet",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "purrs")
-				require.Contains(t, m, "petType")
-				assert.Equal(t, "Cat", m["petType"])
-			},
+			schema:   "Pet",
+			expected: `{"petType":"Cat","purrs":true}`,
 		},
 		{
 			name: "discriminator with mapping uses mapping key",
@@ -2937,14 +2405,8 @@ components:
           sftp: '#/components/schemas/SftpRequest'
           http: '#/components/schemas/HttpRequest'
 `,
-			schema: "DeliveryRequest",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "host")
-				require.Contains(t, m, "port")
-				require.Contains(t, m, "type")
-				assert.Equal(t, "sftp", m["type"])
-			},
+			schema:   "DeliveryRequest",
+			expected: `{"host":"dl2INvNSQT","port":30,"type":"sftp"}`,
 		},
 		{
 			name: "discriminator without mapping falls back to schema name",
@@ -2971,13 +2433,8 @@ components:
       discriminator:
         propertyName: shapeType
 `,
-			schema: "Shape",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "radius")
-				require.Contains(t, m, "shapeType")
-				assert.Equal(t, "Circle", m["shapeType"])
-			},
+			schema:   "Shape",
+			expected: `{"radius":37.92980774361663,"shapeType":"Circle"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2989,11 +2446,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -3003,7 +2456,7 @@ func TestConvertToExamplesAnyOf(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "anyOf picks first variant",
@@ -3024,13 +2477,8 @@ components:
             number:
               type: integer
 `,
-			schema: "StringOrInt",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "text")
-				assert.IsType(t, "", m["text"])
-				assert.NotContains(t, m, "number")
-			},
+			schema:   "StringOrInt",
+			expected: `{"text":"dl2INvNSQT"}`,
 		},
 		{
 			name: "anyOf with ref variants picks first",
@@ -3056,13 +2504,8 @@ components:
         - $ref: '#/components/schemas/Email'
         - $ref: '#/components/schemas/Phone'
 `,
-			schema: "ContactInfo",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "address")
-				assert.IsType(t, "", m["address"])
-				assert.NotContains(t, m, "number")
-			},
+			schema:   "ContactInfo",
+			expected: `{"address":"user@example.com"}`,
 		},
 		{
 			name: "anyOf with discriminator sets property correctly",
@@ -3092,13 +2535,8 @@ components:
           admin: '#/components/schemas/AdminUser'
           regular: '#/components/schemas/RegularUser'
 `,
-			schema: "AnyUser",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "permissions")
-				require.Contains(t, m, "role")
-				assert.Equal(t, "admin", m["role"])
-			},
+			schema:   "AnyUser",
+			expected: `{"permissions":"dl2INvNSQT","role":"admin"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -3110,11 +2548,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -3124,7 +2558,7 @@ func TestConvertToExamplesCompositionWithSiblingProperties(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "object with properties and oneOf merges both",
@@ -3155,15 +2589,8 @@ components:
         - $ref: '#/components/schemas/SftpRequest'
         - $ref: '#/components/schemas/HttpRequest'
 `,
-			schema: "DeliveryCreateRequest",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "host")
-				require.Contains(t, m, "port")
-				assert.IsType(t, "", m["name"])
-				assert.IsType(t, "", m["host"])
-			},
+			schema:   "DeliveryCreateRequest",
+			expected: `{"host":"Z5zQu9MxNm","name":"dl2INvNSQT","port":83}`,
 		},
 		{
 			name: "sibling properties take precedence over composition properties",
@@ -3190,13 +2617,8 @@ components:
       allOf:
         - $ref: '#/components/schemas/Base'
 `,
-			schema: "Override",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "code")
-				assert.Equal(t, "from-sibling", m["name"])
-			},
+			schema:   "Override",
+			expected: `{"code":6,"name":"from-sibling"}`,
 		},
 		{
 			name: "object with properties and allOf merges both",
@@ -3224,16 +2646,8 @@ components:
       allOf:
         - $ref: '#/components/schemas/Timestamps'
 `,
-			schema: "Resource",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "id")
-				require.Contains(t, m, "created_at")
-				require.Contains(t, m, "updated_at")
-				assert.IsType(t, "", m["id"])
-				assert.IsType(t, "", m["created_at"])
-				assert.IsType(t, "", m["updated_at"])
-			},
+			schema:   "Resource",
+			expected: `{"created_at":"2024-01-15T10:30:00Z","id":"123e4567-e89b-12d3-a456-426614174000","updated_at":"2024-01-15T10:30:00Z"}`,
 		},
 		{
 			name: "object with properties and anyOf merges both",
@@ -3263,15 +2677,8 @@ components:
         - $ref: '#/components/schemas/EmailContact'
         - $ref: '#/components/schemas/PhoneContact'
 `,
-			schema: "Person",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "email")
-				assert.IsType(t, "", m["name"])
-				assert.IsType(t, "", m["email"])
-				assert.NotContains(t, m, "phone")
-			},
+			schema:   "Person",
+			expected: `{"email":"user@example.com","name":"dl2INvNSQT"}`,
 		},
 		{
 			name: "discriminator value set correctly with sibling properties",
@@ -3307,15 +2714,8 @@ components:
           sftp: '#/components/schemas/SftpRequest'
           http: '#/components/schemas/HttpRequest'
 `,
-			schema: "DeliveryCreateRequest",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "name")
-				require.Contains(t, m, "host")
-				require.Contains(t, m, "port")
-				require.Contains(t, m, "type")
-				assert.Equal(t, "sftp", m["type"])
-			},
+			schema:   "DeliveryCreateRequest",
+			expected: `{"host":"Z5zQu9MxNm","name":"dl2INvNSQT","port":83,"type":"sftp"}`,
 		},
 		{
 			name: "nested object where property uses composition",
@@ -3345,17 +2745,8 @@ components:
             - $ref: '#/components/schemas/Name'
             - $ref: '#/components/schemas/Age'
 `,
-			schema: "Wrapper",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "person")
-				person := m["person"].(map[string]interface{})
-				require.Contains(t, person, "first")
-				require.Contains(t, person, "last")
-				require.Contains(t, person, "years")
-				assert.IsType(t, "", person["first"])
-				assert.IsType(t, "", person["last"])
-			},
+			schema:   "Wrapper",
+			expected: `{"person":{"first":"le+FHLiWt5VNCmTe5VqQw","last":"AVmNkB33io","years":16}}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -3367,11 +2758,7 @@ components:
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
 
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -3414,17 +2801,8 @@ components:
 	require.Contains(t, result.Examples, "SimpleSchema")
 	require.Contains(t, result.Examples, "Pet")
 
-	var simple map[string]interface{}
-	err = json.Unmarshal(result.Examples["SimpleSchema"], &simple)
-	require.NoError(t, err)
-	require.Contains(t, simple, "name")
-	assert.IsType(t, "", simple["name"])
-
-	var pet map[string]interface{}
-	err = json.Unmarshal(result.Examples["Pet"], &pet)
-	require.NoError(t, err)
-	require.Contains(t, pet, "purrs")
-	assert.IsType(t, true, pet["purrs"])
+	assert.JSONEq(t, `{"name":"dl2INvNSQT"}`, string(result.Examples["SimpleSchema"]))
+	assert.JSONEq(t, `{"purrs":true}`, string(result.Examples["Pet"]))
 }
 
 func TestConvertToExamplesErrorIsolation(t *testing.T) {
@@ -3454,16 +2832,10 @@ components:
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// ErrorSchema is skipped due to array without items
 		assert.NotContains(t, result.Examples, "ErrorSchema")
 
-		// ValidSchema still gets its example
 		require.Contains(t, result.Examples, "ValidSchema")
-		var valid map[string]interface{}
-		err = json.Unmarshal(result.Examples["ValidSchema"], &valid)
-		require.NoError(t, err)
-		require.Contains(t, valid, "name")
-		assert.IsType(t, "", valid["name"])
+		assert.JSONEq(t, `{"name":"dl2INvNSQT"}`, string(result.Examples["ValidSchema"]))
 	})
 
 	t.Run("all valid schemas produce examples", func(t *testing.T) {
@@ -3565,25 +2937,11 @@ components:
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// SimpleSchema generates successfully
 		require.Contains(t, result.Examples, "SimpleSchema")
-		var simple map[string]interface{}
-		err = json.Unmarshal(result.Examples["SimpleSchema"], &simple)
-		require.NoError(t, err)
-		require.Contains(t, simple, "name")
-		assert.IsType(t, "", simple["name"])
-
-		// DeliveryCreateRequest also generates with composition support
 		require.Contains(t, result.Examples, "DeliveryCreateRequest")
-		var delivery map[string]interface{}
-		err = json.Unmarshal(result.Examples["DeliveryCreateRequest"], &delivery)
-		require.NoError(t, err)
-		require.Contains(t, delivery, "name")
-		assert.IsType(t, "", delivery["name"])
-		// Merged from first oneOf variant (SftpRequest)
-		require.Contains(t, delivery, "host")
-		assert.IsType(t, "", delivery["host"])
-		require.Contains(t, delivery, "port")
+
+		assert.JSONEq(t, `{"name":"dl2INvNSQT"}`, string(result.Examples["SimpleSchema"]))
+		assert.JSONEq(t, `{"host":"GyAVmNkB33","name":"Z5zQu9MxNm","port":83}`, string(result.Examples["DeliveryCreateRequest"]))
 	})
 
 	t.Run("multiple valid schemas with one erroring schema in between", func(t *testing.T) {

@@ -1,7 +1,6 @@
 package example_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	schema "github.com/duh-rpc/openapi-schema.go"
@@ -14,7 +13,7 @@ func TestConvertToExamplesStringFormats(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "email format",
@@ -31,14 +30,8 @@ components:
           type: string
           format: email
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "email")
-				email := m["email"].(string)
-				assert.Contains(t, email, "@")
-				assert.Contains(t, email, ".")
-			},
+			schema:   "User",
+			expected: `{"email":"user@example.com"}`,
 		},
 		{
 			name: "uuid format",
@@ -55,14 +48,8 @@ components:
           type: string
           format: uuid
 `,
-			schema: "Resource",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "id")
-				id := m["id"].(string)
-				assert.Contains(t, id, "-")
-				assert.Len(t, id, 36)
-			},
+			schema:   "Resource",
+			expected: `{"id":"123e4567-e89b-12d3-a456-426614174000"}`,
 		},
 		{
 			name: "uri format",
@@ -79,13 +66,8 @@ components:
           type: string
           format: uri
 `,
-			schema: "Link",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "url")
-				url := m["url"].(string)
-				assert.Contains(t, url, "://")
-			},
+			schema:   "Link",
+			expected: `{"url":"https://example.com"}`,
 		},
 		{
 			name: "date format",
@@ -102,13 +84,8 @@ components:
           type: string
           format: date
 `,
-			schema: "Event",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "date")
-				date := m["date"].(string)
-				assert.Regexp(t, `^\d{4}-\d{2}-\d{2}$`, date)
-			},
+			schema:   "Event",
+			expected: `{"date":"2024-01-15"}`,
 		},
 		{
 			name: "date-time format",
@@ -125,14 +102,8 @@ components:
           type: string
           format: date-time
 `,
-			schema: "Timestamp",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "createdAt")
-				createdAt := m["createdAt"].(string)
-				assert.Contains(t, createdAt, "T")
-				assert.Contains(t, createdAt, "Z")
-			},
+			schema:   "Timestamp",
+			expected: `{"createdAt":"2024-01-15T10:30:00Z"}`,
 		},
 		{
 			name: "hostname format",
@@ -149,13 +120,8 @@ components:
           type: string
           format: hostname
 `,
-			schema: "Server",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "host")
-				host := m["host"].(string)
-				assert.Contains(t, host, ".")
-			},
+			schema:   "Server",
+			expected: `{"host":"example.com"}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -166,12 +132,7 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
@@ -181,7 +142,7 @@ func TestConvertToExamplesStringLengthConstraints(t *testing.T) {
 		name     string
 		openapi  string
 		schema   string
-		validate func(t *testing.T, value interface{})
+		expected string
 	}{
 		{
 			name: "string with minLength",
@@ -198,13 +159,8 @@ components:
           type: string
           minLength: 5
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "username")
-				username := m["username"].(string)
-				assert.GreaterOrEqual(t, len(username), 5)
-			},
+			schema:   "User",
+			expected: `{"username":"dl2IN"}`,
 		},
 		{
 			name: "string with maxLength",
@@ -221,13 +177,8 @@ components:
           type: string
           maxLength: 8
 `,
-			schema: "User",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "code")
-				code := m["code"].(string)
-				assert.LessOrEqual(t, len(code), 8)
-			},
+			schema:   "User",
+			expected: `{"code":"l2INvNSQ"}`,
 		},
 		{
 			name: "string with minLength and maxLength",
@@ -245,14 +196,8 @@ components:
           minLength: 10
           maxLength: 15
 `,
-			schema: "Product",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "sku")
-				sku := m["sku"].(string)
-				assert.GreaterOrEqual(t, len(sku), 10)
-				assert.LessOrEqual(t, len(sku), 15)
-			},
+			schema:   "Product",
+			expected: `{"sku":"l2INvNSQTZ5zQu9"}`,
 		},
 		{
 			name: "email format with minLength padding",
@@ -270,14 +215,8 @@ components:
           format: email
           minLength: 30
 `,
-			schema: "Contact",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "email")
-				email := m["email"].(string)
-				assert.GreaterOrEqual(t, len(email), 30)
-				assert.Contains(t, email, "@")
-			},
+			schema:   "Contact",
+			expected: `{"email":"user@example.comxxxxxxxxxxxxxx"}`,
 		},
 		{
 			name: "uuid format with maxLength truncation",
@@ -295,13 +234,8 @@ components:
           format: uuid
           maxLength: 10
 `,
-			schema: "ShortId",
-			validate: func(t *testing.T, value interface{}) {
-				m := value.(map[string]interface{})
-				require.Contains(t, m, "id")
-				id := m["id"].(string)
-				assert.LessOrEqual(t, len(id), 10)
-			},
+			schema:   "ShortId",
+			expected: `{"id":"123e4567-e"}`,
 		},
 		{
 			name: "invalid constraints - minLength greater than maxLength",
@@ -319,9 +253,8 @@ components:
           minLength: 20
           maxLength: 10
 `,
-			schema: "Invalid",
-			validate: func(t *testing.T, value interface{}) {
-			},
+			schema:   "Invalid",
+			expected: "",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -332,18 +265,13 @@ components:
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
-			if test.name == "invalid constraints - minLength greater than maxLength" {
+			if test.expected == "" {
 				assert.Empty(t, result.Examples)
 				return
 			}
 
 			require.Contains(t, result.Examples, test.schema)
-
-			var value interface{}
-			err = json.Unmarshal(result.Examples[test.schema], &value)
-			require.NoError(t, err)
-
-			test.validate(t, value)
+			assert.JSONEq(t, test.expected, string(result.Examples[test.schema]))
 		})
 	}
 }
