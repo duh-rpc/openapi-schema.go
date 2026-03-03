@@ -57,12 +57,12 @@ func GenerateExamples(entries []*parser.SchemaEntry, schemaNames []string, maxDe
 
 		value, err := generateExample(entry.Name, entry.Proxy, ctx)
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		jsonBytes, err := json.Marshal(value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal example for %s: %w", entry.Name, err)
+			continue
 		}
 
 		result[entry.Name] = json.RawMessage(jsonBytes)
@@ -133,6 +133,15 @@ func generateExample(name string, proxy *base.SchemaProxy, ctx *ExampleContext) 
 	}
 
 	if len(schema.Type) == 0 {
+		if len(schema.AllOf) > 0 {
+			return generateAllOfExample(schema, name, ctx)
+		}
+		if len(schema.OneOf) > 0 {
+			return generateOneOfExample(schema, name, ctx)
+		}
+		if len(schema.AnyOf) > 0 {
+			return generateAnyOfExample(schema, name, ctx)
+		}
 		return nil, fmt.Errorf("schema must have type or $ref")
 	}
 
@@ -391,27 +400,218 @@ func generateObjectExample(schema *base.Schema, name string, ctx *ExampleContext
 
 	result := make(map[string]interface{})
 
-	if schema.Properties == nil {
-		return result, nil
-	}
-
 	ctx.depth++
 	defer func() {
 		ctx.depth--
 	}()
 
-	for propName, propProxy := range schema.Properties.FromOldest() {
-		propValue, err := generatePropertyValue(propName, propProxy, ctx)
+	if schema.Properties != nil {
+		for propName, propProxy := range schema.Properties.FromOldest() {
+			propValue, err := generatePropertyValue(propName, propProxy, ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			if propValue != nil {
+				result[propName] = propValue
+			}
+		}
+	}
+
+	if err := mergeCompositionIntoObject(result, schema, name, ctx); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// mergeCompositionIntoObject merges composition (allOf/oneOf/anyOf) properties into an object result.
+// Sibling properties take precedence over composition properties on name conflict.
+func mergeCompositionIntoObject(result map[string]interface{}, schema *base.Schema, name string, ctx *ExampleContext) error {
+	if len(schema.AllOf) > 0 {
+		composed, err := generateAllOfExample(schema, name, ctx)
+		if err != nil {
+			return err
+		}
+		if composedMap, ok := composed.(map[string]interface{}); ok {
+			for k, v := range composedMap {
+				if _, exists := result[k]; !exists {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	if len(schema.OneOf) > 0 {
+		composed, err := generateOneOfExample(schema, name, ctx)
+		if err != nil {
+			return err
+		}
+		if composedMap, ok := composed.(map[string]interface{}); ok {
+			for k, v := range composedMap {
+				if _, exists := result[k]; !exists {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	if len(schema.AnyOf) > 0 {
+		composed, err := generateAnyOfExample(schema, name, ctx)
+		if err != nil {
+			return err
+		}
+		if composedMap, ok := composed.(map[string]interface{}); ok {
+			for k, v := range composedMap {
+				if _, exists := result[k]; !exists {
+					result[k] = v
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// generateAllOfExample generates a merged example from all allOf sub-schemas
+func generateAllOfExample(schema *base.Schema, name string, ctx *ExampleContext) (interface{}, error) {
+	result := make(map[string]interface{})
+
+	for i, entry := range schema.AllOf {
+		if entry == nil {
+			continue
+		}
+
+		var subExample interface{}
+		var err error
+
+		if entry.IsReference() {
+			ref := entry.GetReference()
+			refName, refErr := internal.ExtractReferenceName(ref)
+			if refErr != nil {
+				return nil, refErr
+			}
+
+			refEntry, ok := ctx.schemas[refName]
+			if !ok {
+				return nil, fmt.Errorf("schema '%s' not found", refName)
+			}
+
+			subExample, err = generateExample(refName, refEntry.Proxy, ctx)
+		} else {
+			entryName := fmt.Sprintf("%s/allOf[%d]", name, i)
+			subExample, err = generateExample(entryName, entry, ctx)
+		}
+
 		if err != nil {
 			return nil, err
 		}
 
-		if propValue != nil {
-			result[propName] = propValue
+		if subMap, ok := subExample.(map[string]interface{}); ok {
+			for k, v := range subMap {
+				result[k] = v
+			}
+		}
+	}
+
+	// Merge sibling properties from the schema itself
+	if schema.Properties != nil {
+		ctx.depth++
+		defer func() {
+			ctx.depth--
+		}()
+
+		for propName, propProxy := range schema.Properties.FromOldest() {
+			propValue, err := generatePropertyValue(propName, propProxy, ctx)
+			if err != nil {
+				return nil, err
+			}
+			if propValue != nil {
+				result[propName] = propValue
+			}
 		}
 	}
 
 	return result, nil
+}
+
+// generateOneOfExample generates an example by picking the first variant from oneOf
+func generateOneOfExample(schema *base.Schema, name string, ctx *ExampleContext) (interface{}, error) {
+	return generateFirstVariantExample(schema.OneOf, schema.Discriminator, name, ctx)
+}
+
+// generateAnyOfExample generates an example by picking the first variant from anyOf
+func generateAnyOfExample(schema *base.Schema, name string, ctx *ExampleContext) (interface{}, error) {
+	return generateFirstVariantExample(schema.AnyOf, schema.Discriminator, name, ctx)
+}
+
+// generateFirstVariantExample picks the first variant and generates its example, applying discriminator if present
+func generateFirstVariantExample(variants []*base.SchemaProxy, discriminator *base.Discriminator, name string, ctx *ExampleContext) (interface{}, error) {
+	if len(variants) == 0 {
+		return nil, fmt.Errorf("no variants available for schema %s", name)
+	}
+
+	variant := variants[0]
+	if variant == nil {
+		return nil, fmt.Errorf("first variant is nil for schema %s", name)
+	}
+
+	var result interface{}
+	var err error
+
+	if variant.IsReference() {
+		ref := variant.GetReference()
+		refName, refErr := internal.ExtractReferenceName(ref)
+		if refErr != nil {
+			return nil, refErr
+		}
+
+		entry, ok := ctx.schemas[refName]
+		if !ok {
+			return nil, fmt.Errorf("schema '%s' not found", refName)
+		}
+
+		result, err = generateExample(refName, entry.Proxy, ctx)
+	} else {
+		entryName := fmt.Sprintf("%s/variant[0]", name)
+		result, err = generateExample(entryName, variant, ctx)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if discriminator != nil && discriminator.PropertyName != "" {
+		if resultMap, ok := result.(map[string]interface{}); ok {
+			discriminatorValue := resolveDiscriminatorValue(variant, discriminator)
+			resultMap[discriminator.PropertyName] = discriminatorValue
+			return resultMap, nil
+		}
+	}
+
+	return result, nil
+}
+
+// resolveDiscriminatorValue determines the discriminator value for a given variant
+func resolveDiscriminatorValue(variant *base.SchemaProxy, discriminator *base.Discriminator) string {
+	if variant.IsReference() {
+		ref := variant.GetReference()
+
+		if discriminator.Mapping != nil {
+			for key, value := range discriminator.Mapping.FromOldest() {
+				if value == ref {
+					return key
+				}
+			}
+		}
+
+		refName, err := internal.ExtractReferenceName(ref)
+		if err == nil {
+			return refName
+		}
+	}
+
+	return ""
 }
 
 // generatePropertyValue generates example value for object property
@@ -472,6 +672,15 @@ func generatePropertyValue(propertyName string, propProxy *base.SchemaProxy, ctx
 	}
 
 	if len(schema.Type) == 0 {
+		if len(schema.AllOf) > 0 {
+			return generateAllOfExample(schema, propertyName, ctx)
+		}
+		if len(schema.OneOf) > 0 {
+			return generateOneOfExample(schema, propertyName, ctx)
+		}
+		if len(schema.AnyOf) > 0 {
+			return generateAnyOfExample(schema, propertyName, ctx)
+		}
 		return nil, fmt.Errorf("property must have type or $ref")
 	}
 
