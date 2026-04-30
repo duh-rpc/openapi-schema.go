@@ -427,6 +427,141 @@ message Order {
 	assert.Equal(t, expected, string(result.Protobuf))
 }
 
+func TestConvertStringEnums(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		given    string
+		expected string
+	}{
+		{
+			name: "top-level string enum referenced via $ref becomes string field",
+			given: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Status:
+      type: string
+      enum:
+        - active
+        - inactive
+        - pending
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status'
+`,
+			expected: `syntax = "proto3";
+
+package testpkg;
+
+option go_package = "github.com/example/proto/v1";
+
+message Order {
+  string id = 1 [json_name = "id"];
+  // enum: [active, inactive, pending]
+  string status = 2 [json_name = "status"];
+}
+
+`,
+		},
+		{
+			name: "inline string enum property becomes string field",
+			given: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum:
+            - electronics
+            - clothing
+            - books
+`,
+			expected: `syntax = "proto3";
+
+package testpkg;
+
+option go_package = "github.com/example/proto/v1";
+
+message Product {
+  string name = 1 [json_name = "name"];
+  // enum: [electronics, clothing, books]
+  string category = 2 [json_name = "category"];
+}
+
+`,
+		},
+		{
+			name: "multiple messages referencing the same string enum all become string fields",
+			given: `openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Color:
+      type: string
+      enum:
+        - red
+        - green
+        - blue
+    Car:
+      type: object
+      properties:
+        color:
+          $ref: '#/components/schemas/Color'
+    Shirt:
+      type: object
+      properties:
+        color:
+          $ref: '#/components/schemas/Color'
+`,
+			expected: `syntax = "proto3";
+
+package testpkg;
+
+option go_package = "github.com/example/proto/v1";
+
+message Car {
+  // enum: [red, green, blue]
+  string color = 1 [json_name = "color"];
+}
+
+message Shirt {
+  // enum: [red, green, blue]
+  string color = 1 [json_name = "color"];
+}
+
+`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := schema.Convert([]byte(test.given), schema.ConvertOptions{
+				PackageName: "testpkg",
+				PackagePath: "github.com/example/proto/v1",
+			})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, test.expected, string(result.Protobuf))
+		})
+	}
+}
+
 func TestConvertCompleteExample(t *testing.T) {
 	given := `openapi: 3.0.0
 info:
