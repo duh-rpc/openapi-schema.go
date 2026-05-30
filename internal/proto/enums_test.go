@@ -103,11 +103,10 @@ package testpkg;
 option go_package = "github.com/example/proto/v1";
 
 enum Code {
-  CODE_UNSPECIFIED = 0;
-  CODE_200 = 1;
-  CODE_401 = 2;
-  CODE_404 = 3;
-  CODE_500 = 4;
+  CODE_200 = 0;
+  CODE_401 = 1;
+  CODE_404 = 2;
+  CODE_500 = 3;
 }
 
 `
@@ -365,9 +364,8 @@ package testpkg;
 option go_package = "github.com/example/proto/v1";
 
 enum Code {
-  CODE_UNSPECIFIED = 0;
-  CODE_200 = 1;
-  CODE_404 = 2;
+  CODE_200 = 0;
+  CODE_404 = 1;
 }
 
 message Task {
@@ -580,9 +578,8 @@ option go_package = "github.com/example/proto/v1";
 
 // HTTP status code
 enum Code {
-  CODE_UNSPECIFIED = 0;
-  CODE_200 = 1;
-  CODE_404 = 2;
+  CODE_200 = 0;
+  CODE_404 = 1;
 }
 
 message Task {

@@ -3,6 +3,8 @@ package proto
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -80,9 +82,30 @@ func renderEnum(enum *ProtoEnum) string {
 	for _, value := range enum.Values {
 		result.WriteString(fmt.Sprintf("  %s = %d;\n", value.Name, value.Number))
 	}
+	if reserved := formatReserved(enum.Reserved, "  "); reserved != "" {
+		result.WriteString(reserved)
+	}
 	result.WriteString("}\n")
 
 	return result.String()
+}
+
+// formatReserved renders a `reserved N, M;` statement (numbers ascending) for the
+// given retired field/variant numbers, or "" when there are none.
+func formatReserved(numbers []int, indent string) string {
+	if len(numbers) == 0 {
+		return ""
+	}
+
+	sorted := append([]int(nil), numbers...)
+	sort.Ints(sorted)
+
+	var parts []string
+	for _, n := range sorted {
+		parts = append(parts, strconv.Itoa(n))
+	}
+
+	return fmt.Sprintf("%sreserved %s;\n", indent, strings.Join(parts, ", "))
 }
 
 // renderMessage renders a message definition
@@ -130,6 +153,10 @@ func renderMessageWithIndent(msg *ProtoMessage, indent string) string {
 			result.WriteString(fmt.Sprintf(" [json_name = \"%s\"]", field.JSONName))
 		}
 		result.WriteString(";\n")
+	}
+
+	if reserved := formatReserved(msg.Reserved, indent+"  "); reserved != "" {
+		result.WriteString(reserved)
 	}
 
 	result.WriteString(indent)

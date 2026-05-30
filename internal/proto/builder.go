@@ -2,6 +2,7 @@ package proto
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,6 +17,7 @@ type Context struct {
 	Messages      []*ProtoMessage
 	Enums         []*ProtoEnum
 	Definitions   []interface{} // Mixed enums and messages in processing order
+	FieldNumbers  *FieldNumbers // nil → positional numbering
 	UsesTimestamp bool
 }
 
@@ -36,6 +38,7 @@ type ProtoMessage struct {
 	Description    string
 	Fields         []*ProtoField
 	Nested         []*ProtoMessage
+	Reserved       []int  // proto field numbers retired via removal (rendered as `reserved N, M;`)
 	OriginalSchema string // Original schema name before name tracker renaming
 }
 
@@ -55,6 +58,7 @@ type ProtoEnum struct {
 	Name        string
 	Description string
 	Values      []*ProtoEnumValue
+	Reserved    []int // proto numbers retired via removal (rendered as `reserved N, M;`)
 }
 
 // ProtoEnumValue represents an enum value
@@ -157,6 +161,13 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 		OriginalSchema: name,
 	}
 
+	// When explicit field numbers are supplied for this message, they fully drive
+	// numbering and the reserved list; otherwise numbering stays positional.
+	msgNums := messageNumbersFor(ctx, name)
+	if msgNums != nil {
+		msg.Reserved = msgNums.Reserved
+	}
+
 	fieldTracker := internal.NewNameTracker()
 
 	// Process properties in YAML order
@@ -221,10 +232,17 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 				fieldDescription = ""
 			}
 
-			// Extract field number from x-proto-number extension if present
+			// Field number priority: supplied FieldNumbers (by JSON name) override
+			// everything; otherwise the x-proto-number extension; otherwise positional.
 			customFieldNum, hasCustomNum, _ := extractFieldNumber(propProxy)
 			actualFieldNumber := fieldNumber
-			if hasCustomNum {
+			if msgNums != nil {
+				num, ok := msgNums.Fields[propName]
+				if !ok {
+					return nil, internal.PropertyError(name, propName, "no proto field number mapped in FieldNumbers")
+				}
+				actualFieldNumber = num
+			} else if hasCustomNum {
 				actualFieldNumber = customFieldNum
 			}
 
@@ -240,16 +258,52 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 
 			msg.Fields = append(msg.Fields, field)
 
-			// Only increment auto-counter if we didn't use a custom number
-			if !hasCustomNum {
+			// Only advance the positional counter when positional numbering is active.
+			if msgNums == nil && !hasCustomNum {
 				fieldNumber++
 			}
 		}
 	}
 
+	// With supplied numbers, emit fields in number order so the proto is byte-identical
+	// regardless of OpenAPI declaration order (a pure reorder is a no-op).
+	if msgNums != nil {
+		sortFieldsByNumber(msg.Fields)
+	}
+
 	ctx.Messages = append(ctx.Messages, msg)
 	ctx.Definitions = append(ctx.Definitions, msg)
 	return msg, nil
+}
+
+func sortFieldsByNumber(fields []*ProtoField) {
+	sort.SliceStable(fields, func(i, j int) bool { return fields[i].Number < fields[j].Number })
+}
+
+// messageNumbersFor returns the supplied number mapping for a message keyed by its
+// OpenAPI schema name, or nil when none was supplied (positional numbering).
+func messageNumbersFor(ctx *Context, schemaName string) *MessageNumbers {
+	if ctx.FieldNumbers == nil {
+		return nil
+	}
+	mn, ok := ctx.FieldNumbers.Messages[schemaName]
+	if !ok {
+		return nil
+	}
+	return &mn
+}
+
+// enumNumbersFor returns the supplied number mapping for an enum keyed by its
+// OpenAPI schema name, or nil when none was supplied (positional numbering).
+func enumNumbersFor(ctx *Context, schemaName string) *EnumNumbers {
+	if ctx.FieldNumbers == nil {
+		return nil
+	}
+	en, ok := ctx.FieldNumbers.Enums[schemaName]
+	if !ok {
+		return nil
+	}
+	return &en
 }
 
 // isStringEnum returns true if schema is a string enum
@@ -433,26 +487,40 @@ func buildEnum(name string, proxy *base.SchemaProxy, ctx *Context) (*ProtoEnum, 
 		Values:      []*ProtoEnumValue{},
 	}
 
-	// Add UNSPECIFIED value at 0
-	unspecifiedName := fmt.Sprintf("%s_UNSPECIFIED", strings.ToUpper(internal.ToSnakeCase(enumName)))
-	enum.Values = append(enum.Values, &ProtoEnumValue{
-		Name:   unspecifiedName,
-		Number: 0,
-	})
+	// Numbers come from the supplied mapping (keyed by literal enum value) when
+	// present; otherwise declaration order from 0. The first declared value maps to
+	// 0 with no special case, satisfying proto3's zero-value requirement: callers are
+	// expected to declare an *_UNSPECIFIED sentinel first. The library no longer
+	// synthesizes an UNSPECIFIED value.
+	enumNums := enumNumbersFor(ctx, name)
+	if enumNums != nil {
+		enum.Reserved = enumNums.Reserved
+	}
 
-	// Add original enum values starting at 1
 	for i, value := range schema.Enum {
-		// Extract the actual value from yaml.Node
-		// The Value field contains the string representation
+		// Extract the actual value from yaml.Node; Value holds the string form.
 		var strValue string
 		if value != nil {
 			strValue = value.Value
 		}
-		valueName := internal.ToEnumValueName(enumName, strValue)
+		number := i
+		if enumNums != nil {
+			num, ok := enumNums.Variants[strValue]
+			if !ok {
+				return nil, internal.SchemaError(name, fmt.Sprintf("enum value %q has no proto number mapped in FieldNumbers", strValue))
+			}
+			number = num
+		}
 		enum.Values = append(enum.Values, &ProtoEnumValue{
-			Name:   valueName,
-			Number: i + 1,
+			Name:   internal.ToEnumValueName(enumName, strValue),
+			Number: number,
 		})
+	}
+
+	// With supplied numbers, emit variants in number order for a deterministic,
+	// reorder-invariant proto.
+	if enumNums != nil {
+		sort.SliceStable(enum.Values, func(i, j int) bool { return enum.Values[i].Number < enum.Values[j].Number })
 	}
 
 	ctx.Enums = append(ctx.Enums, enum)

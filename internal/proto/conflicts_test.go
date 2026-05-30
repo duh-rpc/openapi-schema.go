@@ -86,15 +86,13 @@ package testpkg;
 option go_package = "github.com/example/proto/v1";
 
 enum Status {
-  STATUS_UNSPECIFIED = 0;
-  STATUS_1 = 1;
-  STATUS_2 = 2;
+  STATUS_1 = 0;
+  STATUS_2 = 1;
 }
 
 enum Status_2 {
-  STATUS_2_UNSPECIFIED = 0;
-  STATUS_2_10 = 1;
-  STATUS_2_20 = 2;
+  STATUS_2_10 = 0;
+  STATUS_2_20 = 1;
 }
 
 `,
@@ -130,9 +128,8 @@ message Item {
 }
 
 enum Item_2 {
-  ITEM_2_UNSPECIFIED = 0;
-  ITEM_2_1 = 1;
-  ITEM_2_2 = 2;
+  ITEM_2_1 = 0;
+  ITEM_2_2 = 1;
 }
 
 `,
