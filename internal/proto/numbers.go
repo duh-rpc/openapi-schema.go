@@ -10,6 +10,13 @@ package proto
 //   - Fields key     → ProtoField.JSONName (JSON field name)
 //   - Enums key      → the enum's OpenAPI schema name
 //   - Variants key   → the literal OpenAPI enum value
+//
+// Limitation: only top-level component schemas are addressable. The fields of an
+// inline nested object (an inline `type: object` property) are always numbered
+// positionally and cannot be pinned, because an inline nested type has no
+// globally unique key — only its property name, which is not unique across
+// messages. Use a $ref to a named component schema for any type whose field
+// numbers must be wire-stable across regeneration.
 type FieldNumbers struct {
 	Messages map[string]MessageNumbers
 	Enums    map[string]EnumNumbers

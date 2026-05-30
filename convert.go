@@ -116,6 +116,11 @@ const (
 // non-nil on ConvertOptions it overrides positional numbering for any message or
 // enum it has an entry for and drives `reserved` rendering; when nil the library
 // numbers positionally as before (back-compat for non-duh consumers).
+//
+// Only top-level component messages and integer enums are addressable; the fields
+// of an inline nested object are always numbered positionally and cannot be pinned
+// (use a $ref to a named component for types that must be wire-stable). See the
+// proto.FieldNumbers doc for details.
 type FieldNumbers = proto.FieldNumbers
 
 // MessageNumbers pins a message's field numbers (by JSON field name) and reserved numbers.

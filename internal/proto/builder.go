@@ -164,8 +164,10 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 	// When explicit field numbers are supplied for this message, they fully drive
 	// numbering and the reserved list; otherwise numbering stays positional.
 	msgNums := messageNumbersFor(ctx, name)
+	var seenNums map[int]string // active proto number → property, for duplicate detection
 	if msgNums != nil {
 		msg.Reserved = msgNums.Reserved
+		seenNums = make(map[int]string)
 	}
 
 	fieldTracker := internal.NewNameTracker()
@@ -241,6 +243,13 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 				if !ok {
 					return nil, internal.PropertyError(name, propName, "no proto field number mapped in FieldNumbers")
 				}
+				if err := validateProtoFieldNumber(name, propName, num); err != nil {
+					return nil, err
+				}
+				if existing, dup := seenNums[num]; dup {
+					return nil, internal.SchemaError(name, fmt.Sprintf("duplicate proto field number %d used by properties '%s' and '%s'", num, existing, propName))
+				}
+				seenNums[num] = propName
 				actualFieldNumber = num
 			} else if hasCustomNum {
 				actualFieldNumber = customFieldNum
@@ -265,9 +274,15 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 		}
 	}
 
-	// With supplied numbers, emit fields in number order so the proto is byte-identical
-	// regardless of OpenAPI declaration order (a pure reorder is a no-op).
+	// With supplied numbers, a reserved number must not collide with a live field,
+	// then emit fields in number order so the proto is byte-identical regardless of
+	// OpenAPI declaration order (a pure reorder is a no-op).
 	if msgNums != nil {
+		for _, reserved := range msgNums.Reserved {
+			if active, ok := seenNums[reserved]; ok {
+				return nil, internal.SchemaError(name, fmt.Sprintf("reserved proto field number %d conflicts with active field '%s'", reserved, active))
+			}
+		}
 		sortFieldsByNumber(msg.Fields)
 	}
 
@@ -278,6 +293,19 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 
 func sortFieldsByNumber(fields []*ProtoField) {
 	sort.SliceStable(fields, func(i, j int) bool { return fields[i].Number < fields[j].Number })
+}
+
+// validateProtoFieldNumber checks a single supplied proto field number against the
+// same proto3 constraints validateFieldNumbers enforces for x-proto-number: the
+// number must be in 1..536870911 and must not fall in the reserved 19000-19999 range.
+func validateProtoFieldNumber(schemaName, propName string, num int) error {
+	if num < 1 || num > 536870911 {
+		return internal.PropertyError(schemaName, propName, "proto field number must be between 1 and 536870911")
+	}
+	if num >= 19000 && num <= 19999 {
+		return internal.PropertyError(schemaName, propName, fmt.Sprintf("proto field number %d is in reserved range 19000-19999", num))
+	}
+	return nil
 }
 
 // messageNumbersFor returns the supplied number mapping for a message keyed by its
@@ -518,9 +546,13 @@ func buildEnum(name string, proxy *base.SchemaProxy, ctx *Context) (*ProtoEnum, 
 	}
 
 	// With supplied numbers, emit variants in number order for a deterministic,
-	// reorder-invariant proto.
+	// reorder-invariant proto, and require a zero value (proto3 mandates the first
+	// enum value be 0).
 	if enumNums != nil {
 		sort.SliceStable(enum.Values, func(i, j int) bool { return enum.Values[i].Number < enum.Values[j].Number })
+		if len(enum.Values) == 0 || enum.Values[0].Number != 0 {
+			return nil, internal.SchemaError(name, "enum requires a variant mapped to proto number 0 (proto3 zero value)")
+		}
 	}
 
 	ctx.Enums = append(ctx.Enums, enum)
