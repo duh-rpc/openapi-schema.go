@@ -112,6 +112,23 @@ const (
 	TypeLocationGolang TypeLocation = "golang"
 )
 
+// FieldNumbers is an optional, name-keyed proto field-number assignment. When
+// non-nil on ConvertOptions it overrides positional numbering for any message or
+// enum it has an entry for and drives `reserved` rendering; when nil the library
+// numbers positionally as before (back-compat for non-duh consumers).
+//
+// Only top-level component messages and integer enums are addressable; the fields
+// of an inline nested object are always numbered positionally and cannot be pinned
+// (use a $ref to a named component for types that must be wire-stable). See the
+// proto.FieldNumbers doc for details.
+type FieldNumbers = proto.FieldNumbers
+
+// MessageNumbers pins a message's field numbers (by JSON field name) and reserved numbers.
+type MessageNumbers = proto.MessageNumbers
+
+// EnumNumbers pins a proto enum's variant numbers (by literal enum value) and reserved numbers.
+type EnumNumbers = proto.EnumNumbers
+
 // ConvertOptions configures the conversion from OpenAPI to Protocol Buffers
 type ConvertOptions struct {
 	// PackageName is the name of the generated proto3 package (e.g. "api")
@@ -120,6 +137,8 @@ type ConvertOptions struct {
 	PackagePath string
 	// GoPackagePath is the path for generated Go code (defaults to PackagePath if empty)
 	GoPackagePath string
+	// FieldNumbers optionally overrides positional field numbering; nil → positional.
+	FieldNumbers *FieldNumbers
 }
 
 // Convert converts OpenAPI 3.x schemas (3.0, 3.1, 3.2) to Protocol Buffer 3 format.
@@ -173,6 +192,7 @@ func Convert(openapi []byte, opts ConvertOptions) (*ConvertResult, error) {
 	}
 
 	ctx := proto.NewContext()
+	ctx.FieldNumbers = opts.FieldNumbers
 	graph, err := proto.BuildMessages(schemas, ctx)
 	if err != nil {
 		return nil, err

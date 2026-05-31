@@ -80,12 +80,34 @@ func ToPascalCase(s string) string {
 }
 
 // ToEnumValueName converts a value to ENUM_PREFIX_VALUE_NAME format.
-// Examples: (Status, active) → STATUS_ACTIVE, (Status, in-progress) → STATUS_IN_PROGRESS, (SortBy, createdAt) → SORT_BY_CREATED_AT
+// Examples: (Status, active) → STATUS_ACTIVE, (Status, in-progress) → STATUS_IN_PROGRESS,
+// (SortBy, createdAt) → SORT_BY_CREATED_AT.
+//
+// Values that are already in CONSTANT_CASE are normalized without re-splitting
+// (so STATUS_UNSPECIFIED stays STATUS_UNSPECIFIED, not S_T_A_T_U_S_...), and a value
+// that already carries the enum prefix is not double-prefixed
+// (so (Status, STATUS_UNSPECIFIED) → STATUS_UNSPECIFIED, not STATUS_STATUS_UNSPECIFIED).
 func ToEnumValueName(enumName, value string) string {
 	upperEnum := strings.ToUpper(ToSnakeCase(enumName))
-	upperValue := strings.ToUpper(ToSnakeCase(value))
-	upperValue = strings.ReplaceAll(upperValue, "-", "_")
+	upperValue := normalizeEnumValue(value)
+	if upperValue == upperEnum || strings.HasPrefix(upperValue, upperEnum+"_") {
+		return upperValue
+	}
 	return fmt.Sprintf("%s_%s", upperEnum, upperValue)
+}
+
+// normalizeEnumValue converts an enum value to CONSTANT_CASE. Mixed/camelCase
+// values are snake-cased first (createdAt → created_at); values already lacking
+// lowercase letters (active, STATUS_UNSPECIFIED) are only upper-cased so an
+// already-formatted constant is preserved intact.
+func normalizeEnumValue(value string) string {
+	hasLower := strings.ContainsFunc(value, unicode.IsLower)
+	normalized := value
+	if hasLower {
+		normalized = ToSnakeCase(value)
+	}
+	normalized = strings.ToUpper(normalized)
+	return strings.ReplaceAll(normalized, "-", "_")
 }
 
 // SanitizeFieldName sanitizes an OpenAPI field name for proto3 syntax.
