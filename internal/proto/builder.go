@@ -38,8 +38,18 @@ type ProtoMessage struct {
 	Description    string
 	Fields         []*ProtoField
 	Nested         []*ProtoMessage
-	Reserved       []int  // proto field numbers retired via removal (rendered as `reserved N, M;`)
-	OriginalSchema string // Original schema name before name tracker renaming
+	Oneofs         []*ProtoOneof // proto3 oneof groups; members are a subset of Fields
+	Reserved       []int         // proto field numbers retired via removal (rendered as `reserved N, M;`)
+	OriginalSchema string        // Original schema name before name tracker renaming
+}
+
+// ProtoOneof represents a proto3 oneof group. Its Fields are a subset of the owning
+// message's Fields (referenced by identity); the group never assigns or alters field
+// numbers, it only groups already-numbered fields. The group Name is cosmetic and not
+// wire-significant.
+type ProtoOneof struct {
+	Name   string
+	Fields []*ProtoField
 }
 
 // ProtoField represents a proto3 field
@@ -87,8 +97,9 @@ func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*internal.Depen
 			return nil, err
 		}
 
-		// Detect oneOf and mark as union
-		if len(schema.OneOf) > 0 {
+		// Detect oneOf and mark as union. Style B is a protobuf oneof built as a
+		// message, not a Go union, so it is left unmarked.
+		if len(schema.OneOf) > 0 && !isStyleBOneOf(schema) {
 			variants := internal.ExtractVariantNames(schema.OneOf)
 			graph.MarkUnion(entry.Name, "contains oneOf", variants)
 		}
@@ -101,8 +112,9 @@ func BuildMessages(entries []*parser.SchemaEntry, ctx *Context) (*internal.Depen
 			continue
 		}
 
-		// Skip oneOf schemas for now (will be handled as Go code in later phases)
-		if len(schema.OneOf) > 0 {
+		// Flat/discriminated oneOf schemas are handled as Go code; style-B schemas
+		// fall through and are built as protobuf messages with a oneof group.
+		if len(schema.OneOf) > 0 && !isStyleBOneOf(schema) {
 			continue
 		}
 
@@ -286,9 +298,51 @@ func buildMessage(name string, proxy *base.SchemaProxy, ctx *Context, graph *int
 		sortFieldsByNumber(msg.Fields)
 	}
 
+	// Style B: group the variant properties into a protobuf oneof. The fields were
+	// already numbered above by the normal property loop; grouping references them by
+	// identity and never alters numbers.
+	if len(schema.OneOf) > 0 && isStyleBOneOf(schema) {
+		if err := attachOneof(msg, schema, name); err != nil {
+			return nil, err
+		}
+	}
+
 	ctx.Messages = append(ctx.Messages, msg)
 	ctx.Definitions = append(ctx.Definitions, msg)
 	return msg, nil
+}
+
+// attachOneof records that the style-B variant properties belong to one oneof group.
+// Members are referenced by identity from msg.Fields (so numbering and reserved
+// handling are untouched) and emitted in field-number order for deterministic output.
+// The group name is derived from the schema name and is not wire-significant.
+func attachOneof(msg *ProtoMessage, schema *base.Schema, name string) error {
+	byJSON := make(map[string]*ProtoField, len(msg.Fields))
+	for _, f := range msg.Fields {
+		byJSON[f.JSONName] = f
+	}
+
+	group := &ProtoOneof{
+		Name:   internal.ToSnakeCase(msg.OriginalSchema),
+		Fields: make([]*ProtoField, 0, len(schema.OneOf)),
+	}
+	seen := make(map[string]bool, len(schema.OneOf))
+	for _, branch := range schema.OneOf {
+		propName := branch.Schema().Required[0]
+		if seen[propName] {
+			continue
+		}
+		seen[propName] = true
+		field, ok := byJSON[propName]
+		if !ok {
+			return internal.SchemaError(name, fmt.Sprintf("oneOf variant '%s' has no corresponding field", propName))
+		}
+		group.Fields = append(group.Fields, field)
+	}
+	sortFieldsByNumber(group.Fields)
+
+	msg.Oneofs = append(msg.Oneofs, group)
+	return nil
 }
 
 func sortFieldsByNumber(fields []*ProtoField) {
@@ -681,13 +735,24 @@ func validateTopLevelSchema(schema *base.Schema, schemaName string) error {
 	}
 
 	if len(schema.OneOf) > 0 {
+		// Style B (wire-compatible, nested key-tagged) is validated and built as a
+		// protobuf oneof; the flat/discriminated form is validated for the Go path.
+		if isStyleBOneOf(schema) {
+			return validateStyleBOneOf(schema, schemaName)
+		}
+
 		// Require at least 2 variants
 		if len(schema.OneOf) < 2 {
 			return fmt.Errorf("schema '%s': oneOf must have at least 2 variants", schemaName)
 		}
 
-		// Require discriminator
+		// Require discriminator. When no branch is a $ref the author is attempting a
+		// nested (style-B) union rather than a discriminated one, so point them at the
+		// style-B contract instead of suggesting a discriminator that would not help.
 		if schema.Discriminator == nil || schema.Discriminator.PropertyName == "" {
+			if !anyBranchIsRef(schema.OneOf) {
+				return internal.SchemaError(schemaName, "oneOf without a discriminator must be style B: each branch must name exactly one required property declared in properties")
+			}
 			return fmt.Errorf("schema '%s': oneOf requires discriminator", schemaName)
 		}
 
@@ -706,5 +771,79 @@ func validateTopLevelSchema(schema *base.Schema, schemaName string) error {
 		return internal.UnsupportedSchemaError(schemaName, "not")
 	}
 
+	return nil
+}
+
+// isStyleBOneOf reports whether a oneOf schema is the wire-compatible "style B" form:
+// no discriminator, and every oneOf branch is a constraint object (not a $ref/inline
+// variant schema) that carries a `required` list. The flat/discriminated form — a
+// discriminator, or branches that are $ref/inline variant schemas — returns false and
+// is routed to the existing Go-union path.
+//
+// This is a routing predicate only; validateStyleBOneOf enforces the precise shape
+// (exactly one required entry per branch, naming a declared, non-array property).
+func isStyleBOneOf(schema *base.Schema) bool {
+	if schema.Discriminator != nil && schema.Discriminator.PropertyName != "" {
+		return false
+	}
+	for _, branch := range schema.OneOf {
+		if branch.IsReference() {
+			return false
+		}
+		bs := branch.Schema()
+		if bs == nil || len(bs.Required) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// anyBranchIsRef reports whether any oneOf branch is a $ref. A $ref branch signals the
+// classic discriminated/flat union (which legitimately needs a discriminator), as
+// opposed to a malformed nested (style-B) attempt over inline constraint objects.
+func anyBranchIsRef(branches []*base.SchemaProxy) bool {
+	for _, branch := range branches {
+		if branch.IsReference() {
+			return true
+		}
+	}
+	return false
+}
+
+// validateStyleBOneOf enforces the style-B contract so a malformed union is rejected
+// here rather than producing invalid proto3 downstream:
+//   - each oneOf branch must name exactly one required property,
+//   - that property must be declared in the schema's properties,
+//   - that property must not be an array (proto3 forbids `repeated` inside a oneof).
+func validateStyleBOneOf(schema *base.Schema, schemaName string) error {
+	seen := make(map[string]bool, len(schema.OneOf))
+	for _, branch := range schema.OneOf {
+		bs := branch.Schema()
+		if bs == nil {
+			return internal.SchemaError(schemaName, "oneOf branch could not be resolved")
+		}
+		if len(bs.Required) != 1 {
+			return internal.SchemaError(schemaName, fmt.Sprintf("oneOf branch must name exactly one required property, got %d", len(bs.Required)))
+		}
+
+		propName := bs.Required[0]
+		if seen[propName] {
+			return internal.SchemaError(schemaName, fmt.Sprintf("oneOf has a duplicate branch for property '%s'; each variant must appear in exactly one branch", propName))
+		}
+		seen[propName] = true
+
+		if schema.Properties == nil {
+			return internal.SchemaError(schemaName, fmt.Sprintf("oneOf branch requires property '%s' but the schema declares no properties", propName))
+		}
+		propProxy := schema.Properties.GetOrZero(propName)
+		if propProxy == nil {
+			return internal.SchemaError(schemaName, fmt.Sprintf("oneOf branch requires property '%s' which is not declared in properties", propName))
+		}
+
+		propSchema := propProxy.Schema()
+		if propSchema != nil && len(propSchema.Type) > 0 && internal.Contains(propSchema.Type, "array") {
+			return internal.SchemaError(schemaName, fmt.Sprintf("oneOf variant property '%s' is an array; repeated fields are not allowed in a protobuf oneof", propName))
+		}
+	}
 	return nil
 }

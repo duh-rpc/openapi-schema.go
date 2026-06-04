@@ -1,0 +1,126 @@
+package proof_test
+
+import (
+	stdjson "encoding/json"
+	"testing"
+
+	"proof/gen"
+
+	json "google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+)
+
+// canon parses JSON into a normalized value so comparisons ignore the insignificant
+// whitespace protojson deliberately injects. "Wire compatible" means semantic JSON
+// equality — what any JSON consumer actually sees.
+func canon(t *testing.T, b []byte) any {
+	t.Helper()
+	var v any
+	if err := stdjson.Unmarshal(b, &v); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return v
+}
+
+func eq(t *testing.T, want, got any) {
+	t.Helper()
+	wb, _ := stdjson.Marshal(want)
+	gb, _ := stdjson.Marshal(got)
+	if string(wb) != string(gb) {
+		t.Fatalf("not equal:\n want %s\n got  %s", wb, gb)
+	}
+}
+
+// TestGeneratedOneofWireShape proves the generated style-B oneof and the
+// optional-fields form serialize to the same nested, snake_case JSON.
+func TestGeneratedOneofWireShape(t *testing.T) {
+	oneof := &gen.OneofEvent{OneofEvent: &gen.OneofEvent_CatEvent{CatEvent: &gen.Cat{PetName: "Whiskers"}}}
+	optional := &gen.OptionalEvent{CatEvent: &gen.Cat{PetName: "Whiskers"}}
+
+	oneofJSON, err := json.Marshal(oneof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	optionalJSON, err := json.Marshal(optional)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	eq(t, canon(t, oneofJSON), canon(t, optionalJSON))
+	eq(t, canon(t, []byte(`{"cat_event":{"pet_name":"Whiskers"}}`)), canon(t, oneofJSON))
+}
+
+// TestGeneratedCrossUnmarshalJSON proves a server using either form is readable by a
+// client built from the other.
+func TestGeneratedCrossUnmarshalJSON(t *testing.T) {
+	serverBytes, err := json.Marshal(&gen.OneofEvent{
+		OneofEvent: &gen.OneofEvent_CatEvent{CatEvent: &gen.Cat{PetName: "Whiskers"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var asOptional gen.OptionalEvent
+	if err := json.Unmarshal(serverBytes, &asOptional); err != nil {
+		t.Fatal(err)
+	}
+	if asOptional.CatEvent == nil || asOptional.CatEvent.PetName != "Whiskers" || asOptional.DogEvent != nil {
+		t.Fatalf("oneof->optional JSON mismatch: %+v", &asOptional)
+	}
+
+	optionalBytes, err := json.Marshal(&gen.OptionalEvent{CatEvent: &gen.Cat{PetName: "Whiskers"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var asOneof gen.OneofEvent
+	if err := json.Unmarshal(optionalBytes, &asOneof); err != nil {
+		t.Fatal(err)
+	}
+	if asOneof.GetCatEvent() == nil || asOneof.GetCatEvent().PetName != "Whiskers" {
+		t.Fatalf("optional->oneof JSON mismatch: %+v", &asOneof)
+	}
+}
+
+// TestGeneratedBinaryWireCompatible proves the protobuf binary wire is identical too.
+func TestGeneratedBinaryWireCompatible(t *testing.T) {
+	oneofBytes, err := proto.Marshal(&gen.OneofEvent{
+		OneofEvent: &gen.OneofEvent_CatEvent{CatEvent: &gen.Cat{PetName: "Whiskers"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var asOptional gen.OptionalEvent
+	if err := proto.Unmarshal(oneofBytes, &asOptional); err != nil {
+		t.Fatal(err)
+	}
+	if asOptional.CatEvent == nil || asOptional.CatEvent.PetName != "Whiskers" {
+		t.Fatalf("oneof->optional binary mismatch")
+	}
+
+	optionalBytes, err := proto.Marshal(&gen.OptionalEvent{CatEvent: &gen.Cat{PetName: "Whiskers"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(oneofBytes) != string(optionalBytes) {
+		t.Fatalf("binary bytes differ: % x vs % x", oneofBytes, optionalBytes)
+	}
+}
+
+// TestGeneratedOneofRejectsTwoVariants proves the generated oneof enforces exactly-one.
+func TestGeneratedOneofRejectsTwoVariants(t *testing.T) {
+	bothSet := []byte(`{"cat_event":{"pet_name":"Whiskers"},"dog_event":{"pet_name":"Rex"}}`)
+	var asOneof gen.OneofEvent
+	if err := json.Unmarshal(bothSet, &asOneof); err == nil {
+		t.Fatalf("expected oneof to reject two-variant input")
+	}
+}
+
+// TestGeneratedNeitherSet proves the empty case is identical across forms.
+func TestGeneratedNeitherSet(t *testing.T) {
+	oneofJSON, err := json.Marshal(&gen.OneofEvent{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, canon(t, []byte(`{}`)), canon(t, oneofJSON))
+}
