@@ -133,8 +133,27 @@ func renderMessageWithIndent(msg *ProtoMessage, indent string) string {
 		result.WriteString("\n")
 	}
 
+	// Map each oneof member to its group so members render inside the group rather
+	// than as standalone fields; the group renders in place of its first member.
+	memberOf := make(map[*ProtoField]*ProtoOneof)
+	for _, group := range msg.Oneofs {
+		for _, member := range group.Fields {
+			memberOf[member] = group
+		}
+	}
+	rendered := make(map[*ProtoOneof]bool)
+
 	// Render fields
 	for _, field := range msg.Fields {
+		if group := memberOf[field]; group != nil {
+			if rendered[group] {
+				continue
+			}
+			rendered[group] = true
+			result.WriteString(renderOneof(group, indent+"  "))
+			continue
+		}
+
 		if field.Description != "" {
 			result.WriteString(formatComment(field.Description, indent+"  "))
 		}
@@ -162,6 +181,36 @@ func renderMessageWithIndent(msg *ProtoMessage, indent string) string {
 	result.WriteString(indent)
 	result.WriteString("}\n")
 
+	return result.String()
+}
+
+// renderOneof renders a proto3 oneof group. The indent is the indentation of the
+// `oneof` keyword itself; members are indented one level deeper. proto3 forbids
+// `repeated` members, so members render without a repeated prefix.
+func renderOneof(group *ProtoOneof, indent string) string {
+	var result strings.Builder
+	result.WriteString(indent)
+	result.WriteString(fmt.Sprintf("oneof %s {\n", group.Name))
+
+	for _, field := range group.Fields {
+		if field.Description != "" {
+			result.WriteString(formatComment(field.Description, indent+"  "))
+		}
+		if len(field.EnumValues) > 0 {
+			result.WriteString(formatEnumComment(field.EnumValues, indent+"  "))
+		}
+
+		result.WriteString(indent)
+		result.WriteString("  ")
+		result.WriteString(fmt.Sprintf("%s %s = %d", field.Type, field.Name, field.Number))
+		if field.JSONName != "" {
+			result.WriteString(fmt.Sprintf(" [json_name = \"%s\"]", field.JSONName))
+		}
+		result.WriteString(";\n")
+	}
+
+	result.WriteString(indent)
+	result.WriteString("}\n")
 	return result.String()
 }
 

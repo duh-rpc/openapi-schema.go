@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invariant Test Report — openapi-schema.go</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#c9d1d9; --muted:#8b949e;
+          --green:#3fb950; --red:#f85149; --amber:#d29922; --blue:#58a6ff; }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,Segoe UI,Roboto,sans-serif; margin:0; padding:32px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:17px; margin:32px 0 12px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  .sub { color:var(--muted); margin:0 0 24px; }
+  table { border-collapse:collapse; width:100%; margin:8px 0; }
+  th,td { text-align:left; padding:8px 10px; border:1px solid var(--border); vertical-align:top; }
+  th { background:var(--panel); font-weight:600; }
+  code { background:#1f2630; padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600; }
+  .mv { background:rgba(63,185,80,.15); color:var(--green); border:1px solid var(--green); }
+  .ap { background:rgba(88,166,255,.15); color:var(--blue); border:1px solid var(--blue); }
+  .lv { background:rgba(248,81,73,.15); color:var(--red); border:1px solid var(--red); }
+  .no { background:rgba(210,153,34,.15); color:var(--amber); border:1px solid var(--amber); }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin:14px 0; }
+  .muted { color:var(--muted); }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  ul { margin:6px 0; padding-left:20px; }
+</style>
+</head>
+<body>
+<h1>Invariant Test Report</h1>
+<p class="sub">openapi-schema.go &middot; scope: proto wire-compatibility invariants (FieldNumbers / style-B oneOf) &middot; last run 2026-06-03 23:50</p>
+
+<div class="card">
+  <strong>Run summary — 2026-06-03 23:50</strong>
+  <ul>
+    <li>Invariants examined: <strong>5</strong></li>
+    <li>Tests written &amp; mutation-verified: <strong>2</strong> (INV-4 enum order, INV-5 oneof order)</li>
+    <li>Live violations: <strong>0</strong></li>
+    <li>Needs observability: <strong>0</strong></li>
+    <li>Already proven (re-confirmed): <strong>3</strong></li>
+  </ul>
+  <p class="muted">No ADRs exist (<code>docs/adr/</code> empty); invariants were drawn from load-bearing doc
+  comments. This is a single-threaded conversion library, so the "defensive mechanism" that masks an
+  integrity assertion is not a mutex but an <em>alternate code path that produces correct output anyway</em>.
+  Surface = the exported <code>schema.Convert</code>. Baseline suite green before and after.</p>
+</div>
+
+<h2>Invariant ledger</h2>
+<table>
+  <tr><th>ID</th><th>Invariant</th><th>Source</th><th>Status</th></tr>
+  <tr>
+    <td>INV-1</td>
+    <td>Supplied field numbers fully drive message numbering by JSON name, independent of declaration order.</td>
+    <td><code>internal/proto/numbers.go:19</code>, <code>builder.go:289-298</code></td>
+    <td><span class="pill ap">already-proven</span></td>
+  </tr>
+  <tr>
+    <td>INV-2</td>
+    <td>Field numbers validated: range 1..536870911, not in 19000-19999, unique, reserved must not collide with a live field.</td>
+    <td><code>builder.go:355-362</code>, <code>289-297</code></td>
+    <td><span class="pill ap">already-proven</span></td>
+  </tr>
+  <tr>
+    <td>INV-3</td>
+    <td>A proto3 enum with supplied numbers must map a variant to 0 (zero value).</td>
+    <td><code>builder.go:602-609</code></td>
+    <td><span class="pill ap">already-proven</span></td>
+  </tr>
+  <tr>
+    <td>INV-4</td>
+    <td>Enum variants are emitted in proto-number order &rarr; deterministic, reorder-invariant proto.</td>
+    <td><code>builder.go:602-606</code></td>
+    <td><span class="pill mv">mutation-verified</span></td>
+  </tr>
+  <tr>
+    <td>INV-5</td>
+    <td>oneof members are emitted in field-number order &rarr; deterministic output regardless of branch declaration order.</td>
+    <td><code>builder.go:316-342</code></td>
+    <td><span class="pill mv">mutation-verified</span></td>
+  </tr>
+</table>
+
+<h2>Kept vs discarded consequences</h2>
+<div class="card">
+  <p><strong>INV-4 / INV-5 — the masked invariants.</strong> The obvious assertions were
+  <em>discarded</em> because an already-passing mechanism satisfies them even when the ordering invariant is
+  violated:</p>
+  <ul>
+    <li><span class="bad">DISCARDED (integrity):</span> "every variant keeps its locked number" — the per-field
+      number assignment (<code>seenNums</code> / <code>FieldNumbers</code> mapping) guarantees this whether or
+      not the output is sorted. <code>TestStyleBOneOfFieldNumbersAppendOnly</code> already asserts it and stays
+      green under the mutation. Tests the mechanism, not the ordering.</li>
+    <li><span class="bad">DISCARDED (integrity):</span> "enum has a zero value" — the
+      <code>enum.Values[0].Number != 0</code> check fires independently of the sort. Stays green under the mutation.</li>
+    <li><span class="ok">KEPT (determinism):</span> "two specs differing only in declaration/branch order
+      produce byte-identical proto." Nothing but the number-order sort can satisfy this. This is the assertion
+      every existing test missed because each existing test declares variants/branches already in number order,
+      so the sort is a no-op and its removal is invisible.</li>
+  </ul>
+</div>
+
+<h2>Mutation proofs</h2>
+<table>
+  <tr><th>Invariant</th><th>Test</th><th>Mutation</th><th>Red on mutation?</th><th>Green on revert?</th></tr>
+  <tr>
+    <td>INV-4</td>
+    <td><code>convert_determinism_test.go</code> &middot; <code>TestConvertEnumNumbersReorderInvariant</code></td>
+    <td>Removed <code>sort.SliceStable(enum.Values…)</code> at <code>builder.go:606</code></td>
+    <td class="ok">YES — only this test failed; all <code>internal/proto</code> enum tests stayed green</td>
+    <td class="ok">YES</td>
+  </tr>
+  <tr>
+    <td>INV-5</td>
+    <td><code>convert_determinism_test.go</code> &middot; <code>TestConvertStyleBOneOfReorderInvariant</code></td>
+    <td>Removed <code>sortFieldsByNumber(group.Fields)</code> at <code>builder.go:342</code></td>
+    <td class="ok">YES — only this test failed (diff showed <code>dog_event</code> before <code>cat_event</code>)</td>
+    <td class="ok">YES</td>
+  </tr>
+</table>
+
+<h2>Already-proven invariants (re-confirmed, not rewritten)</h2>
+<ul>
+  <li><strong>INV-1</strong> — <code>TestConvertFieldNumbersOverride</code> declares <code>displayName, email, name</code>
+    but maps <code>name=1, email=2, displayName=4</code>; declaration order ≠ number order, so removing the
+    message-field sort would break it. Genuine guard.</li>
+  <li><strong>INV-2</strong> — <code>TestConvertFieldNumbersValidation</code> covers range, reserved-range,
+    duplicate, and reserved-vs-live collision through <code>Convert</code>.</li>
+  <li><strong>INV-3</strong> — <code>TestConvertEnumNumbersRequiresZeroValue</code> asserts the no-zero error path.</li>
+</ul>
+
+<h2>Run history</h2>
+<table>
+  <tr><th>Run</th><th>Examined</th><th>Mutation-verified</th><th>Live violations</th><th>Already-proven</th></tr>
+  <tr><td>2026-06-03 23:50</td><td>5</td><td>2 (INV-4, INV-5)</td><td>0</td><td>3</td></tr>
+</table>
+
+<script type="application/json" id="invariant-test-data">
+{
+  "scope": "proto wire-compatibility invariants (FieldNumbers / style-B oneOf) in openapi-schema.go",
+  "surface": "exported schema.Convert([]byte, ConvertOptions)",
+  "adrs": "none (docs/adr empty); invariants sourced from load-bearing doc comments",
+  "baseline": "green",
+  "runs": [
+    { "timestamp": "2026-06-03 23:50", "examined": 5, "mutationVerified": 2, "liveViolations": 0, "needsObservability": 0, "alreadyProven": 3 }
+  ],
+  "invariants": [
+    {
+      "id": "INV-1",
+      "statement": "Supplied field numbers fully drive message field numbering by JSON name, independent of declaration order.",
+      "source": "internal/proto/numbers.go:19; internal/proto/builder.go:289-298",
+      "resources": ["ProtoMessage.Fields numbering/order"],
+      "defensiveMechanisms": ["per-field FieldNumbers mapping + seenNums duplicate guard"],
+      "purpose": "Regenerating from a reordered/edited OpenAPI spec keeps wire-stable field numbers.",
+      "consequences": [
+        { "bucket": "ordering", "defect": "fields emitted in declaration order, not number order", "surfaceObservable": true, "verdict": "KEEP", "reason": "test scrambles decl vs number order" }
+      ],
+      "test": { "file": "convert_fieldnumbers_test.go", "assertion": "golden proto with name=1,email=2,displayName=4 from scrambled declaration order" },
+      "status": "already-proven",
+      "evidenceGrade": "spec-asserted",
+      "history": [ { "timestamp": "2026-06-03 23:50", "status": "already-proven" } ]
+    },
+    {
+      "id": "INV-2",
+      "statement": "Field numbers validated: range 1..536870911, not in 19000-19999, unique, reserved not colliding with a live field.",
+      "source": "internal/proto/builder.go:355-362, 289-297",
+      "resources": ["proto field numbers"],
+      "defensiveMechanisms": ["validateProtoFieldNumber; seenNums; reserved/live scan"],
+      "purpose": "Reject specs that would emit invalid proto3.",
+      "consequences": [
+        { "bucket": "integrity", "defect": "invalid proto3 emitted silently", "surfaceObservable": true, "verdict": "KEEP", "reason": "error path observable via Convert" }
+      ],
+      "test": { "file": "convert_fieldnumbers_validation_test.go", "assertion": "table of invalid mappings each returns error" },
+      "status": "already-proven",
+      "evidenceGrade": "spec-asserted",
+      "history": [ { "timestamp": "2026-06-03 23:50", "status": "already-proven" } ]
+    },
+    {
+      "id": "INV-3",
+      "statement": "A proto3 enum with supplied numbers must map a variant to 0 (zero value).",
+      "source": "internal/proto/builder.go:602-609",
+      "resources": ["ProtoEnum.Values"],
+      "defensiveMechanisms": ["enum.Values[0].Number != 0 check"],
+      "purpose": "proto3 mandates the first enum value be 0.",
+      "consequences": [
+        { "bucket": "integrity", "defect": "invalid proto3 enum without zero value", "surfaceObservable": true, "verdict": "KEEP", "reason": "error path observable" }
+      ],
+      "test": { "file": "convert_fieldnumbers_validation_test.go", "assertion": "TestConvertEnumNumbersRequiresZeroValue expects error containing 0" },
+      "status": "already-proven",
+      "evidenceGrade": "spec-asserted",
+      "history": [ { "timestamp": "2026-06-03 23:50", "status": "already-proven" } ]
+    },
+    {
+      "id": "INV-4",
+      "statement": "Enum variants are emitted in proto-number order, yielding a deterministic, reorder-invariant proto.",
+      "source": "internal/proto/builder.go:602-606",
+      "resources": ["ProtoEnum.Values order"],
+      "defensiveMechanisms": ["zero-value check (passes regardless of order); per-variant number mapping (passes regardless of order)"],
+      "purpose": "Two specs differing only in enum declaration order must produce byte-identical proto.",
+      "consequences": [
+        { "bucket": "integrity", "defect": "each variant keeps its number", "surfaceObservable": true, "verdict": "DISCARD", "reason": "number mapping satisfies it even with sort removed" },
+        { "bucket": "ordering", "defect": "variants follow declaration order; reordered spec rewrites proto", "surfaceObservable": true, "verdict": "KEEP", "reason": "only the number-order sort can satisfy reorder-invariance" }
+      ],
+      "test": {
+        "file": "convert_determinism_test.go",
+        "assertion": "TestConvertEnumNumbersReorderInvariant — two declaration orders produce byte-identical proto; CODE_0<CODE_200<CODE_404 by number",
+        "mutationUsed": "removed sort.SliceStable(enum.Values...) at builder.go:606",
+        "redOnMutation": true,
+        "greenOnCorrect": true
+      },
+      "status": "mutation-verified",
+      "evidenceGrade": "mutation-verified",
+      "history": [ { "timestamp": "2026-06-03 23:50", "status": "mutation-verified" } ]
+    },
+    {
+      "id": "INV-5",
+      "statement": "oneof members are emitted in field-number order, deterministic regardless of oneOf branch declaration order.",
+      "source": "internal/proto/builder.go:316-342",
+      "resources": ["ProtoOneof.Fields order"],
+      "defensiveMechanisms": ["fields referenced by identity with locked numbers (TestStyleBOneOfFieldNumbersAppendOnly); message-field sort (separate slice, does not order the group)"],
+      "purpose": "Two specs differing only in oneOf branch order must produce byte-identical proto.",
+      "consequences": [
+        { "bucket": "integrity", "defect": "members keep their locked numbers", "surfaceObservable": true, "verdict": "DISCARD", "reason": "append-only guard already asserts this and stays green under mutation" },
+        { "bucket": "ordering", "defect": "members follow branch order; reordered branches rewrite proto", "surfaceObservable": true, "verdict": "KEEP", "reason": "only the group's number-order sort can satisfy it" }
+      ],
+      "test": {
+        "file": "convert_determinism_test.go",
+        "assertion": "TestConvertStyleBOneOfReorderInvariant — branch order [cat,dog] vs [dog,cat] produce byte-identical proto; cat_event(1) before dog_event(2)",
+        "mutationUsed": "removed sortFieldsByNumber(group.Fields) at builder.go:342",
+        "redOnMutation": true,
+        "greenOnCorrect": true
+      },
+      "status": "mutation-verified",
+      "evidenceGrade": "mutation-verified",
+      "history": [ { "timestamp": "2026-06-03 23:50", "status": "mutation-verified" } ]
+    }
+  ]
+}
+</script>
+</body>
+</html>

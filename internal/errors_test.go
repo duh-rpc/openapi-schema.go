@@ -157,7 +157,7 @@ components:
             width:
               type: number
 `,
-			expected: "oneOf requires discriminator",
+			expected: "oneOf without a discriminator must be style B",
 		},
 		{
 			name: "oneOf in property with inline schemas",
